@@ -105,15 +105,13 @@
         };
 
         // Utility function to open map for navigation
-        const navigateToDonor = (lat, lng) => {
-            if (lat && lng) {
-                // CORRECTED Google Maps URL for coordinates:
-                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-                window.open(googleMapsUrl, '_blank');
-            } else {
-                showMessage("Donor location coordinates are unavailable.", 'error');
-            }
-        };
+const navigateToDonor = (lat, lng) => {
+    if (lat && lng) {
+        // CORRECTED Google Maps URL for coordinates:
+        const googleMapsUrl = `https://maps.google.com/maps?q=${lat},${lng}`; // <-- This is the fix!
+        window.open(googleMapsUrl, '_blank');
+    } // ...
+};
         window.navigateToDonor = navigateToDonor;
 
         // Toggle password visibility
@@ -137,7 +135,7 @@
 
         // The unique webhook URL you just created in n8n
         // NOTE: This must match the URL you provided: http://localhost:5678/webhook-test/update-location
-        const N8N_WEBHOOK_URL = 'http://localhost:5678/webhook-test/update-location';
+        const N8N_WEBHOOK_URL = 'http://localhost:5678/webhook/update-location';
 
         /**
          * Fetches the user's public IP and sends it along with their User ID to n8n for processing.
