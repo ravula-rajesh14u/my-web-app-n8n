@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LifeDrop: Blood Donor Network</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -105,13 +106,13 @@
         };
 
         // Utility function to open map for navigation
-const navigateToDonor = (lat, lng) => {
-    if (lat && lng) {
-        // CORRECTED Google Maps URL for coordinates:
-         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`; // <-- This is the fix!
-        window.open(googleMapsUrl, '_blank');
-    } // ...
-};
+        const navigateToDonor = (lat, lng) => {
+            if (lat && lng) {
+                // CORRECTED Google Maps URL for coordinates:
+                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`; // <-- This is the fix!
+                window.open(googleMapsUrl, '_blank');
+            } // ...
+        };
         window.navigateToDonor = navigateToDonor;
 
         // Toggle password visibility
@@ -255,7 +256,7 @@ const navigateToDonor = (lat, lng) => {
         let locationWatchId = null;
         let userLocation = { lat: null, lng: null };
 
-        // Function to handle the successful location update
+        // Function to handle the successful location update (AUTOMATIC)
         const handleLocationSuccess = async (position) => {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
@@ -286,7 +287,7 @@ const navigateToDonor = (lat, lng) => {
             }
         };
 
-        // Function to handle location errors
+        // Function to handle location errors (AUTOMATIC)
         const handleLocationError = (error) => {
             console.error("Geolocation Error:", error);
             userLocation.lat = null;
@@ -301,7 +302,82 @@ const navigateToDonor = (lat, lng) => {
             locationStatus.classList.add('text-red-500');
             document.getElementById('search-donors-btn').disabled = false;
         };
+        
+        // === NEW: MANUAL LOCATION FALLBACK FUNCTION ===
+        /**
+         * Function to manually request the user's location (fallback for mobile failures).
+         * This uses getCurrentPosition instead of watchPosition for a one-time, high-accuracy fix.
+         */
+        window.getPreciseUserLocation = () => {
+            const statusText = document.getElementById('manual-location-status');
+            const button = document.getElementById('get-manual-location-btn');
 
+            if (!navigator.geolocation) {
+                statusText.textContent = 'Geolocation is not supported by your browser.';
+                statusText.classList.add('text-red-500');
+                return;
+            }
+
+            // UI Feedback
+            statusText.textContent = 'Finding precise GPS location...';
+            statusText.classList.remove('text-red-500', 'text-green-500', 'text-gray-500');
+            statusText.classList.add('text-blue-600');
+            button.disabled = true;
+
+            // One-time request for position
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    // 1. Update the session/search location variables
+                    userLocation.lat = lat; 
+                    userLocation.lng = lng;
+
+                    // 2. Update the main status display as well
+                    const mainStatus = document.getElementById('location-status');
+                    mainStatus.innerHTML = `Location FIX: Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)} (Manual)`;
+                    mainStatus.classList.remove('text-red-500', 'text-yellow-600');
+                    mainStatus.classList.add('text-green-500');
+
+                    // 3. UI Feedback
+                    statusText.textContent = `Manual Location set successfully!`;
+                    statusText.classList.add('text-green-500');
+                    button.disabled = false;
+
+                    // 4. Update Firestore
+                    if (currentUserId && db) {
+                        const donorDocRef = doc(db, "artifacts", appId, "public", "data", "donors", currentUserId);
+                        setDoc(donorDocRef, {
+                            location: { lat: lat, lng: lng },
+                            lastUpdated: Date.now()
+                        }, { merge: true }).catch(e => console.error("Firestore update failed:", e));
+                    }
+
+                    // 5. Re-trigger search if a blood type is selected
+                    if (document.getElementById('search-bloodType').value) {
+                        searchDonors();
+                    }
+                },
+                (error) => {
+                    let errorMessage = "Location denied or timed out. Check browser settings.";
+                    if (error.code === error.PERMISSION_DENIED) {
+                        errorMessage = "Permission Denied: Enable location in browser settings and try again.";
+                    }
+                    
+                    statusText.textContent = errorMessage;
+                    statusText.classList.remove('text-blue-600', 'text-green-500');
+                    statusText.classList.add('text-red-500');
+                    button.disabled = false;
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000, // 10 seconds timeout
+                    maximumAge: 0   // Get a fresh location
+                }
+            );
+        };
+        // ======================================================
 
         // Function to start automated location tracking (called when search-view opens)
         const startLocationTracking = () => {
@@ -438,10 +514,10 @@ const navigateToDonor = (lat, lng) => {
                 }
                 
             } catch (configError) {
-                 console.error("Firebase Initialization Failed:", configError);
-                 showMessage(`Critical initialization failure: ${configError.message}`, 'error');
-                 showView('login-view');
-                 updateNavigationVisibility(false);
+                   console.error("Firebase Initialization Failed:", configError);
+                   showMessage(`Critical initialization failure: ${configError.message}`, 'error');
+                   showView('login-view');
+                   updateNavigationVisibility(false);
             }
         };
 
@@ -598,11 +674,11 @@ const navigateToDonor = (lat, lng) => {
             resultsContainer.innerHTML = '';
             
             if (!userLocation.lat || !userLocation.lng) {
-                // **UPDATED MESSAGE HERE**
+                // **UPDATED MESSAGE HERE to suggest the manual button**
                 resultsContainer.innerHTML = `
                     <div class="text-center py-8">
                         <p class="text-red-500 font-semibold mb-2">Your location is not yet acquired. Please wait until 'Tracking Active' shows a green status.</p>
-                        <p class="text-sm text-gray-600">If the status remains yellow, please **refresh the page** and ensure you **grant location access** when prompted.</p>
+                        <p class="text-sm text-gray-600">If the status remains yellow, or you're on a mobile device, use the **'Get Precise Location'** button above as a fallback.</p>
                     </div>
                 `;
                 return;
@@ -665,10 +741,7 @@ const navigateToDonor = (lat, lng) => {
                             <p class="text-sm text-gray-500">Total Donations: <span class="font-semibold text-red-700">${donor.donationCount || 0}</span></p>
                         </div>
                         <div class="flex items-center">
-                            <div class="text-right mr-3">
-                                <span class="inline-block px-3 py-1 text-sm font-bold text-white bg-red-600 rounded-full">${donor.bloodType}</span>
-                                <p class="text-md font-medium text-gray-700 mt-1">${distanceText}</p>
-                            </div>
+                            <span class="text-xl font-extrabold text-red-500 mr-4">${distanceText}</span>
                             ${navigateButton}
                         </div>
                     </div>
@@ -676,186 +749,204 @@ const navigateToDonor = (lat, lng) => {
                 resultsContainer.innerHTML += donorCard;
             });
         };
+        window.searchDonors = searchDonors;
 
-        document.getElementById('search-donors-btn').addEventListener('click', searchDonors);
+        // --- Initialize on Document Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebase();
+            
+            // Connect the manual button listener
+            document.getElementById('get-manual-location-btn').addEventListener('click', window.getPreciseUserLocation);
+        });
 
-        // --- Initial Setup ---
-        window.onload = initializeFirebase;
     </script>
 </head>
-<body class="min-h-screen bg-gray-100 flex flex-col">
+<body class="min-h-screen">
 
-    <header class="bg-white shadow-md sticky top-0 z-10">
+    <div id="message-container" class="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-sm z-50 p-4 hidden"></div>
+
+    <nav class="bg-white shadow-md sticky top-0 z-40">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <h1 class="text-2xl font-extrabold text-red-600 tracking-wider">
-                    LifeDrop
-                </h1>
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 text-2xl font-extrabold text-red-600">
+                        LifeDrop 🩸
+                    </div>
+                </div>
                 <div class="flex items-center space-x-4">
-                    <a href="#" onclick="showView('search-view')" class="text-gray-600 hover:text-red-600 transition duration-150 ease-in-out font-medium">Search</a>
-                    <a href="#" onclick="showView('profile-view')" class="text-gray-600 hover:text-red-600 transition duration-150 ease-in-out font-medium">Profile</a>
-                    
-                    <button id="nav-register-btn" onclick="showView('register-view')" class="px-4 py-1 text-sm font-medium text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition-colors">Register</button>
-                    <button id="nav-login-btn" onclick="showView('login-view')" class="px-4 py-1 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors">Login</button>
-                    <button id="logout-btn" class="hidden px-4 py-1 text-sm font-medium text-white bg-gray-500 rounded-lg hover:bg-gray-700 transition-colors">Logout</button>
+                    <button id="nav-login-btn" onclick="showView('login-view')" class="text-gray-600 hover:text-red-500 font-medium">Login</button>
+                    <button id="nav-register-btn" onclick="showView('register-view')" class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
+                        Register as Donor
+                    </button>
+                    <button id="logout-btn" class="hidden px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                        Logout
+                    </button>
                 </div>
             </div>
         </div>
-    </header>
+    </nav>
 
-    <main class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
-        <div id="message-container" class="fixed top-20 right-4 w-full max-w-sm z-50"></div>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        <div id="login-view" class="app-view max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6 hidden">
-            <h2 class="text-3xl font-bold text-center text-red-600">Login to LifeDrop</h2>
-            <form id="login-form" class="space-y-4">
+        <div id="login-view" class="app-view hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl">
+            <h2 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">Donor Login</h2>
+            <form id="login-form" class="space-y-6">
                 <div>
-                    <label for="login-email" class="block text-sm font-medium text-gray-700">Email Address</label>
-                    <input type="email" id="login-email" name="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    <label for="login-email" class="block text-sm font-medium text-gray-700">Email address</label>
+                    <input id="login-email" name="email" type="email" autocomplete="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm">
                 </div>
                 <div>
                     <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
-                    <div class="relative mt-1">
-                        <input type="password" id="login-password" name="password" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
-                        <button type="button" onclick="togglePasswordVisibility('login-password', 'login-toggle-icon')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-red-600">
-                            <span id="login-toggle-icon">
+                    <div class="mt-1 relative rounded-md shadow-sm">
+                        <input id="login-password" name="password" type="password" autocomplete="current-password" required class="block w-full pr-10 px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5">
+                            <span id="login-password-icon" class="text-gray-500 cursor-pointer" onclick="togglePasswordVisibility('login-password', 'login-password-icon')">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                             </span>
-                        </button>
+                        </div>
                     </div>
                 </div>
-                <div class="flex justify-end">
-                    <button type="button" onclick="handleForgotPassword()" class="text-sm font-medium text-red-600 hover:text-red-800 transition-colors">
+                <div class="flex items-center justify-between">
+                    <button type="button" onclick="handleForgotPassword()" class="text-sm text-blue-600 hover:text-blue-500">
                         Forgot Password?
                     </button>
+                    <button type="button" onclick="showView('register-view')" class="text-sm text-red-600 hover:text-red-500 font-medium">
+                        Need an account? Register
+                    </button>
                 </div>
-                
-                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                    Sign In
-                </button>
+                <div>
+                    <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">
+                        Log In
+                    </button>
+                </div>
             </form>
-            <p class="text-center text-sm text-gray-600">
-                New to LifeDrop? 
-                <a href="#" onclick="showView('register-view')" class="font-medium text-red-600 hover:text-red-500">
-                    Register here
-                </a>
-            </p>
         </div>
 
-        <div id="register-view" class="app-view max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6 hidden">
-            <h2 class="text-3xl font-bold text-center text-red-600">Become a Donor</h2>
-            <form id="register-form" class="space-y-4">
+        <div id="register-view" class="app-view hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl">
+            <h2 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">Donor Registration</h2>
+            <form id="register-form" class="space-y-6">
                 <div>
                     <label for="register-name" class="block text-sm font-medium text-gray-700">Full Name</label>
-                    <input type="text" id="register-name" name="name" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    <input id="register-name" name="name" type="text" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                 </div>
                 <div>
-                    <label for="register-email" class="block text-sm font-medium text-gray-700">Email Address</label>
-                    <input type="email" id="register-email" name="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    <label for="register-email" class="block text-sm font-medium text-gray-700">Email address</label>
+                    <input id="register-email" name="email" type="email" autocomplete="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                 </div>
                 <div>
                     <label for="register-bloodType" class="block text-sm font-medium text-gray-700">Blood Type</label>
-                    <select id="register-bloodType" name="bloodType" required class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
-                        <option value="">Select...</option>
-                        <option value="A+">A Positive (A+)</option>
-                        <option value="A-">A Negative (A-)</option>
-                        <option value="B+">B Positive (B+)</option>
-                        <option value="B-">B Negative (B-)</option>
-                        <option value="AB+">AB Positive (AB+)</option>
-                        <option value="AB-">AB Negative (AB-)</option>
-                        <option value="O+">O Positive (O+)</option>
-                        <option value="O-">O Negative (O-)</option>
+                    <select id="register-bloodType" name="bloodType" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm rounded-md">
+                        <option value="">Select Blood Type</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
                     </select>
                 </div>
                 <div>
-                    <label for="register-password" class="block text-sm font-medium text-gray-700">Password (min 6 chars)</label>
-                    <div class="relative mt-1">
-                        <input type="password" id="register-password" name="password" required minlength="6" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
-                        <button type="button" onclick="togglePasswordVisibility('register-password', 'register-toggle-icon')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-red-600">
-                            <span id="register-toggle-icon">
+                    <label for="register-password" class="block text-sm font-medium text-gray-700">Password (Min 6 chars)</label>
+                    <div class="mt-1 relative rounded-md shadow-sm">
+                        <input id="register-password" name="password" type="password" required minlength="6" class="block w-full pr-10 px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5">
+                            <span id="register-password-icon" class="text-gray-500 cursor-pointer" onclick="togglePasswordVisibility('register-password', 'register-password-icon')">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                             </span>
-                        </button>
+                        </div>
                     </div>
                 </div>
-                
-                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                    Register
-                </button>
+                <div>
+                    <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">
+                        Register
+                    </button>
+                </div>
             </form>
-            <p class="text-center text-sm text-gray-600">
-                Already registered? 
-                <a href="#" onclick="showView('login-view')" class="font-medium text-red-600 hover:text-red-500">
-                    Login here
-                </a>
-            </p>
-        </div>
-
-        <div id="profile-view" class="app-view max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6 hidden">
-            <h2 class="text-3xl font-bold text-red-600 border-b pb-3 mb-4">Your Donor Profile</h2>
-            
-            <div id="donor-status-display" class="bg-red-50 p-6 rounded-lg border border-red-200">
-                <p class="text-gray-500">Loading donor profile...</p>
-            </div>
-            
-            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                <p class="text-sm text-gray-600 mb-4">
-                    Thank you for donating! We rely on you to accurately record your donations.
-                    <span id="user-id-display" class="block mt-1 font-mono text-xs text-gray-400">User ID: N/A</span>
-                </p>
-                <button onclick="recordDonation()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-md text-base font-semibold text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-                    Record Latest Donation
+            <div class="mt-4 text-center">
+                <button type="button" onclick="showView('login-view')" class="text-sm text-red-600 hover:text-red-500 font-medium">
+                    Already have an account? Login
                 </button>
-                <p class="text-xs text-red-500 mt-2 text-center">Note: A donation must be recorded at least 56 days after the last one.</p>
             </div>
-            
-            <button onclick="showView('search-view')" class="w-full flex justify-center py-2 px-4 rounded-md text-sm font-medium text-red-600 bg-white border border-red-600 hover:bg-red-50 transition-colors">
-                Go to Donor Search
-            </button>
         </div>
 
-        <div id="search-view" class="app-view space-y-6 hidden">
-            <h2 class="text-3xl font-bold text-red-600">Find Emergency Donors</h2>
+        <div id="search-view" class="app-view hidden grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-red-500 flex flex-col sm:flex-row justify-between items-start sm:items-end space-y-4 sm:space-y-0">
+            <div class="lg:col-span-1 space-y-6">
                 
-                <div class="flex items-center space-x-3 w-full sm:w-auto">
-                    <div>
-                        <label for="search-bloodType" class="block text-sm font-medium text-gray-700">Blood Type Needed:</label>
-                        <select id="search-bloodType" required class="mt-1 block w-40 px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 text-base">
-                            <option value="">Select...</option>
-                            <option value="A+">A+</option>
-                            <option value="A-">A-</option>
-                            <option value="B+">B+</option>
-                            <option value="B-">B-</option>
-                            <option value="AB+">AB+</option>
-                            <option value="AB-">AB-</option>
-                            <option value="O+">O+</option>
-                            <option value="O-">O-</option>
-                        </select>
+                <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-red-500">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 flex justify-between items-center">
+                        Your Donor Status
+                        <i class="fas fa-heartbeat text-red-500"></i>
+                    </h3>
+                    <div id="donor-status-display" class="mb-4">
+                        <p class="text-gray-500">Loading profile data...</p>
                     </div>
-                    <button id="search-donors-btn" class="mt-7 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition-colors disabled:opacity-50" disabled>
-                        Search Donors
+                    <button onclick="recordDonation()" class="w-full px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors shadow-md">
+                        Record a Donation Now
                     </button>
                 </div>
                 
-                <div class="text-right">
-                    <p class="text-xs font-semibold text-gray-500">Live Location Status:</p>
-                    <p id="location-status" class="text-sm font-medium text-gray-500">Tracking inactive.</p>
-                    <p class="text-xs text-gray-400 mt-1">Updates location every few seconds for accuracy.</p>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 flex justify-between items-center">
+                        Find Donors Near You
+                        <i class="fas fa-search text-gray-500"></i>
+                    </h3>
+                    
+                    <div id="search-controls" class="space-y-4">
+                        
+                        <div class="space-y-2">
+                            <label for="search-bloodType" class="block text-sm font-medium text-gray-700">Blood Type Needed</label>
+                            <select id="search-bloodType" onchange="searchDonors()" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm rounded-md">
+                                <option value="">Select Blood Type...</option>
+                                <option value="A+">A+</option>
+                                <option value="A-">A-</option>
+                                <option value="B+">B+</option>
+                                <option value="B-">B-</option>
+                                <option value="O+">O+</option>
+                                <option value="O-">O-</option>
+                                <option value="AB+">AB+</option>
+                                <option value="AB-">AB-</option>
+                            </select>
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <p class="text-sm font-medium text-gray-700">Your Location Status:</p>
+                            <p id="location-status" class="text-xs text-yellow-600 font-semibold italic">Attempting to acquire live location...</p>
+                        </div>
+                        
+                        <div class="pt-2 border-t border-gray-100">
+                            <button id="get-manual-location-btn" class="w-full flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                                <i class="fas fa-location-arrow mr-2"></i> Get Precise Location (Fallback)
+                            </button>
+                            <p id="manual-location-status" class="text-xs text-gray-500 mt-1 h-4"></p>
+                        </div>
+                        <div>
+                            <button id="search-donors-btn" onclick="searchDonors()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-lg font-bold text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors" disabled>
+                                Search Donors
+                            </button>
+                        </div>
+                        
+                    </div>
+                </div>
+
+                <p id="user-id-display" class="text-xs text-gray-400 text-center mt-4"></p>
+            </div>
+
+            <div class="lg:col-span-2 space-y-4">
+                <h3 class="text-2xl font-bold text-gray-800 border-b pb-2">Search Results</h3>
+                <div id="donor-results" class="space-y-4 custom-scrollbar max-h-[80vh] overflow-y-auto">
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-tint text-4xl mb-4 text-red-400"></i>
+                        <p>Select a blood type and wait for location tracking to start searching for nearby donors.</p>
+                    </div>
                 </div>
             </div>
 
-            <div id="donor-results" class="space-y-4 custom-scrollbar overflow-y-auto max-h-[60vh] bg-white p-4 rounded-xl shadow-inner">
-                <p class="text-gray-500 text-center py-8">Select a blood type and press 'Search Donors' to find nearby eligible donors.</p>
-                </div>
         </div>
 
     </main>
-
-    <footer class="bg-gray-800 text-white text-center p-4 mt-auto">
-        <p class="text-sm">LifeDrop: Saving Lives Through Digital Connection | © 2024</p>
-    </footer>
 
 </body>
 </html>
