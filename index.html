@@ -1,0 +1,863 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LifeDrop: Blood Donor Network</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Lighter background */
+        }
+        .donor-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .donor-card:hover {
+            transform: translateY(-3px);
+            /* Custom shadow with a touch of red for emphasis */
+            box-shadow: 0 12px 20px -5px rgba(239, 68, 68, 0.2), 0 4px 6px -2px rgba(239, 68, 68, 0.08);
+        }
+        /* Custom scrollbar for better aesthetics */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #f87171;
+            border-radius: 4px;
+        }
+    </style>
+    <script type="module">
+        // Import necessary Firebase functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+        import { getAuth, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, increment } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+
+        // Global variables provided by the Canvas environment (used for setup)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lifedrop-default-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // --- IMPORTANT: FALLBACK CONFIGURATION (User's provided keys) ---
+        const FALLBACK_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAbcunNYa1fkdtOQ0IoORwz-dodW2kyhV4",
+            authDomain: "blooddonar-app-71fb5.firebaseapp.com",
+            projectId: "blooddonar-app-71fb5",
+            storageBucket: "blooddonar-app-71fb5.firebasestorage.app",
+            messagingSenderId: "652032534017",
+            appId: "1:652032534017:web:bb73ce54cd5ea6c8904200",
+            measurementId: "G-NEKHBBJQY2"
+        };
+        
+        // Configuration Logic
+        let firebaseConfig = FALLBACK_FIREBASE_CONFIG; 
+        const envConfigString = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+
+        if (envConfigString && envConfigString.trim() !== '') {
+            try {
+                const parsedEnvConfig = JSON.parse(envConfigString);
+                if (parsedEnvConfig.apiKey && parsedEnvConfig.authDomain) {
+                    firebaseConfig = parsedEnvConfig;
+                } else {
+                    console.warn("Environment config lacked required fields. Sticking to hardcoded fallback.");
+                }
+            } catch (e) {
+                console.error("Error parsing __firebase_config from environment. Sticking to hardcoded fallback.", e);
+            }
+        }
+        window.firebaseConfig = firebaseConfig;
+        console.log("Final Firebase Config used:", firebaseConfig);
+        // ----------------------------------------------------
+
+
+        let db, auth;
+        let currentUserId = null;
+        let isAuthReady = false;
+        let currentUserData = null; // Store current user's profile
+        
+        // Constants for 56-day rule
+        const MIN_DAYS_BETWEEN_DONATIONS = 56;
+        const MIN_MS_BETWEEN_DONATIONS = MIN_DAYS_BETWEEN_DONATIONS * 24 * 60 * 60 * 1000; // 56 days in milliseconds
+
+        // --- Utility Functions ---
+
+        // Utility function to show custom messages
+        const showMessage = (message, type = 'info') => {
+            const container = document.getElementById('message-container');
+            const color = type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-blue-500';
+            const html = `<div class="${color} text-white px-4 py-2 rounded-lg shadow-lg mb-4 text-sm">${message}</div>`;
+            container.innerHTML = html;
+            container.style.display = 'block';
+            setTimeout(() => {
+                container.innerHTML = '';
+                container.style.display = 'none';
+            }, 5000);
+        };
+
+        // Haversine formula to calculate distance
+        const calculateDistance = (lat1, lon1, lat2, lon2) => {
+            const R = 6371; // Radius of Earth in kilometers
+            const dLat = (lat2 - lat1) * (Math.PI / 180);
+            const dLon = (lon2 - lon1) * (Math.PI / 180);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distance in km
+        };
+
+        // Utility function to open map for navigation
+        const navigateToDonor = (lat, lng) => {
+            if (lat && lng) {
+                // CORRECTED Google Maps URL for coordinates:
+                const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+                window.open(googleMapsUrl, '_blank');
+            } else {
+                showMessage("Donor location coordinates are unavailable.", 'error');
+            }
+        };
+        window.navigateToDonor = navigateToDonor;
+
+        // Toggle password visibility
+        const togglePasswordVisibility = (inputId, iconId) => {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.97 0-9.23-2.99-11.23-7a1.002 1.002 0 011.02-1.42l3.41 3.41m2.812-2.812A2 2 0 0112 13a2 2 0 012-2c.465 0 .895.167 1.237.456l.78-.78m2.59-2.59L22.9 2.1l-1.414 1.414L1.414 21.086l1.414 1.414L10.5 15.586a10.05 10.05 0 005.15-2.02l3.18 3.18a1.002 1.002 0 01-1.42 1.02z"></path></svg>`;
+            } else {
+                input.type = 'password';
+                icon.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>`;
+            }
+        };
+        window.togglePasswordVisibility = togglePasswordVisibility;
+
+        // ====================================================================
+        // === n8n WEBHOOK FUNCTIONALITY (IP Tracking) ========================
+        // ====================================================================
+
+        // The unique webhook URL you just created in n8n
+        // NOTE: This must match the URL you provided: http://localhost:5678/webhook-test/update-location
+        const N8N_WEBHOOK_URL = 'http://localhost:5678/webhook-test/update-location';
+
+        /**
+         * Fetches the user's public IP and sends it along with their User ID to n8n for processing.
+         * This runs once upon successful login.
+         * @param {string} userId - The Firebase UID of the logged-in user.
+         */
+        const updateLocationViaN8N = async (userId) => {
+            console.log("Attempting to send location update to n8n...");
+            try {
+                // 1. Get the public IP address using an external, public API
+                const ipResponse = await fetch('https://api.ipify.org?format=json');
+                const ipData = await ipResponse.json();
+                const ipAddress = ipData.ip;
+
+                // 2. Data payload for n8n
+                const payload = { 
+                    userId: userId,
+                    ip: ipAddress 
+                };
+                
+                // 3. Send data to the n8n Webhook
+                const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                console.log(`[INFO] IP Geolocation request sent to n8n. Check n8n Editor for success. IP: ${ipAddress}`);
+                
+
+            } catch (error) {
+                console.error("[CRITICAL ERROR] Could not connect to n8n or fetch IP (Is n8n running?):", error);
+            }
+        };
+
+        // ====================================================================
+        // === END OF n8n WEBHOOK FUNCTIONALITY ===============================
+        // ====================================================================
+        
+        // --- Forgot Password Function ---
+        const handleForgotPassword = async () => {
+            const emailInput = document.getElementById('login-email');
+            const email = emailInput.value;
+
+            if (!email) {
+                showMessage("Please enter your email address to reset your password.", 'error');
+                emailInput.focus();
+                return;
+            }
+
+            try {
+                if (!auth) {
+                    showMessage("Authentication system is not ready.", 'error');
+                    return;
+                }
+                
+                await sendPasswordResetEmail(auth, email);
+                showMessage(`Password reset link sent to ${email}. Check your inbox!`, 'success');
+            } catch (error) {
+                console.error("Password reset failed:", error);
+                showMessage(`Password reset failed: ${error.message}`, 'error');
+            }
+        };
+        window.handleForgotPassword = handleForgotPassword;
+
+
+        // Function to update current user's data display
+        const updateDonorStatusDisplay = () => {
+            const statusDiv = document.getElementById('donor-status-display');
+            if (!currentUserData) {
+                statusDiv.innerHTML = '<p class="text-gray-500">Loading donor profile...</p>';
+                return;
+            }
+
+            const lastDonationMs = currentUserData.lastDonationDate || 0;
+            const timeSinceDonationMs = Date.now() - lastDonationMs;
+            
+            const daysRemaining = MIN_DAYS_BETWEEN_DONATIONS - Math.floor(timeSinceDonationMs / (24 * 60 * 60 * 1000));
+
+            let donationStatusHtml;
+            if (daysRemaining > 0) {
+                donationStatusHtml = `
+                    <p class="text-lg font-bold text-red-600">Ineligible to donate</p>
+                    <p class="text-sm text-red-500">You must wait ${daysRemaining} more days (56-day rule).</p>
+                `;
+            } else {
+                donationStatusHtml = `
+                    <p class="text-lg font-bold text-green-600">Eligible to Donate!</p>
+                    <p class="text-sm text-green-500">You have completed the required rest period.</p>
+                `;
+            }
+
+            const lastDonationDate = lastDonationMs 
+                ? new Date(lastDonationMs).toLocaleDateString() 
+                : 'Never Recorded';
+                
+            const totalCount = currentUserData.donationCount || 0;
+
+            statusDiv.innerHTML = `
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <p class="text-base font-medium text-gray-700">Last Donation:</p>
+                        <p class="text-base font-semibold text-gray-900">${lastDonationDate}</p>
+                    </div>
+                    <div class="flex items-center justify-between border-b pb-3">
+                        <p class="text-base font-medium text-gray-700">Total Donations:</p>
+                        <p class="text-base font-semibold text-red-700">${totalCount}</p>
+                    </div>
+                    <div class="pt-3">
+                        ${donationStatusHtml}
+                    </div>
+                </div>
+            `;
+        };
+        
+        // --- Location Tracking Management (AUTOMATED SESSION TRACKING) ---
+        let locationWatchId = null;
+        let userLocation = { lat: null, lng: null };
+
+        // Function to handle the successful location update
+        const handleLocationSuccess = async (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            userLocation.lat = lat;
+            userLocation.lng = lng;
+
+            const locationStatus = document.getElementById('location-status');
+            locationStatus.innerHTML = `Location LIVE: Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+            locationStatus.classList.remove('text-red-500', 'text-yellow-600');
+            locationStatus.classList.add('text-green-500');
+            document.getElementById('search-donors-btn').disabled = false;
+            
+            // Automatically update Firestore with the new location
+            if (currentUserId && db) {
+                try {
+                    const donorDocRef = doc(db, "artifacts", appId, "public", "data", "donors", currentUserId);
+                    await setDoc(donorDocRef, {
+                        location: { lat: lat, lng: lng },
+                        lastUpdated: Date.now()
+                    }, { merge: true });
+                    // Re-run search whenever location changes (if a search is active)
+                    if (document.getElementById('search-bloodType').value) {
+                        searchDonors();
+                    }
+                } catch (error) {
+                    console.error("Failed to update location in Firestore:", error);
+                }
+            }
+        };
+
+        // Function to handle location errors
+        const handleLocationError = (error) => {
+            console.error("Geolocation Error:", error);
+            userLocation.lat = null;
+            userLocation.lng = null;
+            const locationStatus = document.getElementById('location-status');
+            let message = 'Location access failed or denied. Search results may be inaccurate.';
+            if (error.code === 1) {
+                message = 'Location permission denied. You must enable it in your browser settings.';
+            }
+            locationStatus.textContent = message;
+            locationStatus.classList.remove('text-green-500', 'text-yellow-600');
+            locationStatus.classList.add('text-red-500');
+            document.getElementById('search-donors-btn').disabled = false;
+        };
+
+
+        // Function to start automated location tracking (called when search-view opens)
+        const startLocationTracking = () => {
+            if (locationWatchId !== null) return; // Already tracking
+
+            const searchBtn = document.getElementById('search-donors-btn');
+            const locationStatus = document.getElementById('location-status');
+
+            searchBtn.disabled = true;
+            locationStatus.textContent = 'Attempting to acquire live location...';
+            locationStatus.classList.remove('text-green-500', 'text-red-500');
+            locationStatus.classList.add('text-yellow-600');
+
+            // Start watching the user's position
+            locationWatchId = navigator.geolocation.watchPosition(
+                handleLocationSuccess,
+                handleLocationError,
+                { 
+                    enableHighAccuracy: true,
+                    timeout: 5000, 
+                    maximumAge: 0 
+                }
+            );
+        };
+
+        // Function to stop location tracking (Crucial for performance/battery)
+        const stopLocationTracking = () => {
+            if (locationWatchId !== null) {
+                navigator.geolocation.clearWatch(locationWatchId);
+                locationWatchId = null;
+                console.log("Location tracking stopped.");
+            }
+            // Reset location status when logging out/leaving the search view
+            const locationStatus = document.getElementById('location-status');
+            if (locationStatus) {
+                locationStatus.textContent = 'Location tracking stopped.';
+                locationStatus.classList.remove('text-green-500', 'text-red-500', 'text-yellow-600');
+                locationStatus.classList.add('text-gray-500');
+            }
+        };
+
+
+        // --- View Management ---
+        window.showView = (viewId) => {
+            document.querySelectorAll('.app-view').forEach(view => {
+                view.classList.add('hidden');
+            });
+            
+            if (viewId !== 'search-view') {
+                // Stop tracking if the user navigates away from the search page
+                stopLocationTracking(); 
+            }
+
+            const targetView = document.getElementById(viewId);
+            if (targetView) {
+                targetView.classList.remove('hidden');
+                if (viewId === 'search-view') {
+                    // START tracking automatically when user enters search page
+                    startLocationTracking(); 
+                }
+            } else {
+                console.error(`View with ID "${viewId}" not found.`);
+            }
+        };
+
+        const updateNavigationVisibility = (isLoggedIn) => {
+            const navRegisterBtn = document.getElementById('nav-register-btn');
+            const navLoginBtn = document.getElementById('nav-login-btn');
+            const logoutBtn = document.getElementById('logout-btn');
+
+            if (isLoggedIn) {
+                navRegisterBtn?.classList.add('hidden');
+                navLoginBtn?.classList.add('hidden');
+                logoutBtn?.classList.remove('hidden');
+            } else {
+                navRegisterBtn?.classList.remove('hidden');
+                navLoginBtn?.classList.remove('hidden');
+                logoutBtn?.classList.add('hidden');
+            }
+        };
+
+        // --- Firebase Initialization and Auth ---
+
+        const initializeFirebase = async () => {
+            
+            // Final validation before init: CRITICAL CHECK for both apiKey and authDomain
+            if (!firebaseConfig || !firebaseConfig.apiKey || !firebaseConfig.authDomain) {
+                console.error("Fatal Error: Firebase configuration is missing the API Key or Auth Domain.");
+                showMessage("Cannot connect to database. Authentication configuration is incomplete.", 'error');
+                showView('login-view');
+                updateNavigationVisibility(false);
+                return;
+            }
+
+            setLogLevel('Debug');
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app); 
+
+                onAuthStateChanged(auth, async (user) => {
+                    isAuthReady = true;
+                    if (user) {
+                        currentUserId = user.uid;
+                        document.getElementById('user-id-display').textContent = `User ID: ${currentUserId}`;
+                        showView('search-view');
+                        updateNavigationVisibility(true);
+                        setupDonorListener(); 
+                        setupCurrentUserListener(); // Listener for user-specific profile
+                    } else {
+                        currentUserId = null;
+                        currentUserData = null;
+                        showView('login-view'); // Default view when no user is logged in
+                        updateNavigationVisibility(false);
+                        stopLocationTracking(); // Ensure tracking is stopped on logout
+                    }
+                });
+
+                // Manual Authentication Attempt (If a custom token exists)
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    }
+                } catch (error) {
+                    console.error("Firebase Auth Sign-in Error:", error);
+                    // Custom error message for when the initial login fails
+                    showMessage("Authentication failed. Please login, or register if you are new.", 'error');
+                    
+                    // Ensure we are on the login view if sign-in failed
+                    if (!auth.currentUser) {
+                        showView('login-view'); 
+                        updateNavigationVisibility(false);
+                    }
+                }
+                
+            } catch (configError) {
+                 console.error("Firebase Initialization Failed:", configError);
+                 showMessage(`Critical initialization failure: ${configError.message}`, 'error');
+                 showView('login-view');
+                 updateNavigationVisibility(false);
+            }
+        };
+
+        // --- Current User Profile Listener ---
+        const setupCurrentUserListener = () => {
+             if (!db || !currentUserId) return;
+
+             const userDocRef = doc(db, "artifacts", appId, "public", "data", "donors", currentUserId);
+             onSnapshot(userDocRef, (docSnap) => {
+                 if (docSnap.exists()) {
+                     currentUserData = docSnap.data();
+                     updateDonorStatusDisplay(); // Update the profile panel
+                 }
+             }, (error) => {
+                 console.error("Error setting up current user listener:", error);
+             });
+        }
+        
+        // --- Record Donation Logic ---
+        window.recordDonation = async () => {
+            if (!currentUserId || !db) {
+                showMessage("You must be logged in to record a donation.", 'error');
+                return;
+            }
+            if (!currentUserData) {
+                showMessage("Loading profile data, please wait...", 'info');
+                return;
+            }
+
+            const lastDonationMs = currentUserData.lastDonationDate || 0;
+            const timeSinceDonationMs = Date.now() - lastDonationMs;
+            
+            if (timeSinceDonationMs < MIN_MS_BETWEEN_DONATIONS) {
+                const daysRemaining = MIN_DAYS_BETWEEN_DONATIONS - Math.floor(timeSinceDonationMs / (24 * 60 * 60 * 1000));
+                showMessage(`Cannot record donation. You must wait ${daysRemaining} more days.`, 'error');
+                return;
+            }
+
+            try {
+                const donorDocRef = doc(db, "artifacts", appId, "public", "data", "donors", currentUserId);
+                await setDoc(donorDocRef, {
+                    lastDonationDate: Date.now(), // New donation timestamp
+                    donationCount: increment(1) // Increment the count
+                }, { merge: true });
+
+                showMessage("Donation successfully recorded! You are now ineligible to donate for 56 days.", 'success');
+            } catch (error) {
+                console.error("Failed to record donation:", error);
+                showMessage(`Failed to record donation: ${error.message}`, 'error');
+            }
+        };
+
+
+        // --- Registration Logic ---
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = e.target.name.value;
+            const email = e.target.email.value;
+            const bloodType = e.target.bloodType.value;
+            const password = e.target.password.value;
+
+            if (!auth || password.length < 6) {
+                showMessage("Authentication not ready or password too short.", 'error');
+                return;
+            }
+
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                
+                // Set initial placeholder location (to be updated automatically on search-view load)
+                const lat = 17.3850 + (Math.random() - 0.5) * 0.1; 
+                const lng = 78.4867 + (Math.random() - 0.5) * 0.1;
+
+                const donorDocRef = doc(db, "artifacts", appId, "public", "data", "donors", user.uid);
+                await setDoc(donorDocRef, {
+                    uid: user.uid,
+                    name: name,
+                    email: email,
+                    bloodType: bloodType,
+                    location: { lat: lat, lng: lng },
+                    lastUpdated: Date.now(),
+                    lastDonationDate: 0, 
+                    donationCount: 0      
+                });
+
+                showMessage("Registration successful! Please wait for location to be acquired.", 'success');
+                e.target.reset();
+            } catch (error) {
+                showMessage(`Registration failed: ${error.message}`, 'error');
+            }
+        });
+
+        // --- Login Logic ---
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = e.target.email.value;
+            const password = e.target.password.value;
+            if (!auth) return;
+            
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                
+                // Send the user's ID and IP to n8n immediately upon successful login.
+                await updateLocationViaN8N(user.uid); 
+                
+                showMessage("Login successful!", 'success');
+                e.target.reset();
+            } catch (error) {
+                console.error("Login failed:", error);
+                showMessage(`Login failed: ${error.message}`, 'error');
+            }
+        });
+
+        // --- Logout Logic ---
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            if (!auth) return;
+            try {
+                await signOut(auth);
+                stopLocationTracking(); // Stop tracking immediately
+                showMessage("Logged out successfully.", 'info');
+            } catch (error) {
+                console.error("Logout failed:", error);
+                showMessage(`Logout failed: ${error.message}`, 'error');
+            }
+        });
+
+        // --- Donor Search and Real-Time Listener ---
+
+        let donorData = [];
+        
+
+        // Real-time listener for all public donor data
+        const setupDonorListener = () => {
+            if (!db || !isAuthReady) return;
+
+            const donorsColRef = collection(db, "artifacts", appId, "public", "data", "donors");
+            onSnapshot(donorsColRef, (snapshot) => {
+                donorData = snapshot.docs.map(doc => doc.data());
+                console.log(`Received ${donorData.length} donor records in real-time.`);
+                if (document.getElementById('search-bloodType').value) {
+                    searchDonors();
+                }
+            }, (error) => {
+                console.error("Error setting up donor listener:", error);
+                showMessage("Failed to load donor data. Check Firebase rules and Authentication.", 'error');
+            });
+        };
+
+        const searchDonors = () => {
+            const requestedBloodType = document.getElementById('search-bloodType').value;
+            const resultsContainer = document.getElementById('donor-results');
+            resultsContainer.innerHTML = '';
+            
+            if (!userLocation.lat || !userLocation.lng) {
+                // **UPDATED MESSAGE HERE**
+                resultsContainer.innerHTML = `
+                    <div class="text-center py-8">
+                        <p class="text-red-500 font-semibold mb-2">Your location is not yet acquired. Please wait until 'Tracking Active' shows a green status.</p>
+                        <p class="text-sm text-gray-600">If the status remains yellow, please **refresh the page** and ensure you **grant location access** when prompted.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (!requestedBloodType) {
+                resultsContainer.innerHTML = `<p class="text-yellow-600 text-center py-8">Please select a blood type to search.</p>`;
+                return;
+            }
+
+            let filteredDonors = donorData.filter(donor => {
+                // 1. Filter by Blood Type and exclude self
+                if (donor.bloodType !== requestedBloodType || donor.uid === currentUserId) {
+                    return false;
+                }
+
+                // 2. Apply 56-day exclusion rule
+                const lastDonationMs = donor.lastDonationDate || 0;
+                const timeSinceDonationMs = Date.now() - lastDonationMs;
+
+                if (timeSinceDonationMs < MIN_MS_BETWEEN_DONATIONS) {
+                    // This donor is ineligible due to the 56-day rule
+                    return false;
+                }
+
+                return true;
+            });
+
+            // Calculate distance and sort
+            filteredDonors = filteredDonors.map(donor => {
+                if (donor.location && donor.location.lat && donor.location.lng) {
+                    const distance = calculateDistance(
+                        userLocation.lat, userLocation.lng,
+                        donor.location.lat, donor.location.lng
+                    );
+                    return { ...donor, distance: distance };
+                }
+                return { ...donor, distance: Infinity };
+            }).sort((a, b) => a.distance - b.distance);
+
+            if (filteredDonors.length === 0) {
+                resultsContainer.innerHTML = `<p class="text-gray-500 text-center py-8">No eligible donors found for blood type <span class="font-bold text-red-600">${requestedBloodType}</span> nearby (or they are within the 56-day exclusion period).</p>`;
+                return;
+            }
+
+            filteredDonors.forEach(donor => {
+                const distanceText = donor.distance === Infinity ? 'Location Unavailable' : `${donor.distance.toFixed(2)} km away`;
+                
+                const navigateButton = donor.distance !== Infinity ? 
+                    `<button onclick="navigateToDonor(${donor.location.lat}, ${donor.location.lng})" class="ml-4 px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md flex items-center shrink-0">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.828 0l-4.243-4.243m-4.243 2.828V12a8 8 0 1116 0v6.657m-4.243 2.828V12a8 8 0 00-16 0v6.657l4.243 4.243a1.998 1.998 0 002.828 0l4.243-4.243"></path></svg>
+                        Navigate
+                    </button>` : '';
+
+
+                const donorCard = `
+                    <div class="donor-card bg-white p-5 rounded-xl shadow-lg border-t-4 border-red-500 flex justify-between items-center transition-all duration-300">
+                        <div>
+                            <p class="text-xl font-bold text-red-800">${donor.name}</p>
+                            <p class="text-sm text-gray-500">Total Donations: <span class="font-semibold text-red-700">${donor.donationCount || 0}</span></p>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="text-right mr-3">
+                                <span class="inline-block px-3 py-1 text-sm font-bold text-white bg-red-600 rounded-full">${donor.bloodType}</span>
+                                <p class="text-md font-medium text-gray-700 mt-1">${distanceText}</p>
+                            </div>
+                            ${navigateButton}
+                        </div>
+                    </div>
+                `;
+                resultsContainer.innerHTML += donorCard;
+            });
+        };
+
+        document.getElementById('search-donors-btn').addEventListener('click', searchDonors);
+
+        // --- Initial Setup ---
+        window.onload = initializeFirebase;
+    </script>
+</head>
+<body class="min-h-screen bg-gray-100 flex flex-col">
+
+    <header class="bg-white shadow-md sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <h1 class="text-2xl font-extrabold text-red-600 tracking-wider">
+                    LifeDrop
+                </h1>
+                <div class="flex items-center space-x-4">
+                    <a href="#" onclick="showView('search-view')" class="text-gray-600 hover:text-red-600 transition duration-150 ease-in-out font-medium">Search</a>
+                    <a href="#" onclick="showView('profile-view')" class="text-gray-600 hover:text-red-600 transition duration-150 ease-in-out font-medium">Profile</a>
+                    
+                    <button id="nav-register-btn" onclick="showView('register-view')" class="px-4 py-1 text-sm font-medium text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition-colors">Register</button>
+                    <button id="nav-login-btn" onclick="showView('login-view')" class="px-4 py-1 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors">Login</button>
+                    <button id="logout-btn" class="hidden px-4 py-1 text-sm font-medium text-white bg-gray-500 rounded-lg hover:bg-gray-700 transition-colors">Logout</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
+        <div id="message-container" class="fixed top-20 right-4 w-full max-w-sm z-50"></div>
+
+        <div id="login-view" class="app-view max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6 hidden">
+            <h2 class="text-3xl font-bold text-center text-red-600">Login to LifeDrop</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                    <input type="email" id="login-email" name="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <div class="relative mt-1">
+                        <input type="password" id="login-password" name="password" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
+                        <button type="button" onclick="togglePasswordVisibility('login-password', 'login-toggle-icon')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-red-600">
+                            <span id="login-toggle-icon">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="button" onclick="handleForgotPassword()" class="text-sm font-medium text-red-600 hover:text-red-800 transition-colors">
+                        Forgot Password?
+                    </button>
+                </div>
+                
+                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                    Sign In
+                </button>
+            </form>
+            <p class="text-center text-sm text-gray-600">
+                New to LifeDrop? 
+                <a href="#" onclick="showView('register-view')" class="font-medium text-red-600 hover:text-red-500">
+                    Register here
+                </a>
+            </p>
+        </div>
+
+        <div id="register-view" class="app-view max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6 hidden">
+            <h2 class="text-3xl font-bold text-center text-red-600">Become a Donor</h2>
+            <form id="register-form" class="space-y-4">
+                <div>
+                    <label for="register-name" class="block text-sm font-medium text-gray-700">Full Name</label>
+                    <input type="text" id="register-name" name="name" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                </div>
+                <div>
+                    <label for="register-email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                    <input type="email" id="register-email" name="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                </div>
+                <div>
+                    <label for="register-bloodType" class="block text-sm font-medium text-gray-700">Blood Type</label>
+                    <select id="register-bloodType" name="bloodType" required class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                        <option value="">Select...</option>
+                        <option value="A+">A Positive (A+)</option>
+                        <option value="A-">A Negative (A-)</option>
+                        <option value="B+">B Positive (B+)</option>
+                        <option value="B-">B Negative (B-)</option>
+                        <option value="AB+">AB Positive (AB+)</option>
+                        <option value="AB-">AB Negative (AB-)</option>
+                        <option value="O+">O Positive (O+)</option>
+                        <option value="O-">O Negative (O-)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="register-password" class="block text-sm font-medium text-gray-700">Password (min 6 chars)</label>
+                    <div class="relative mt-1">
+                        <input type="password" id="register-password" name="password" required minlength="6" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-10">
+                        <button type="button" onclick="togglePasswordVisibility('register-password', 'register-toggle-icon')" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-red-600">
+                            <span id="register-toggle-icon">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                
+                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                    Register
+                </button>
+            </form>
+            <p class="text-center text-sm text-gray-600">
+                Already registered? 
+                <a href="#" onclick="showView('login-view')" class="font-medium text-red-600 hover:text-red-500">
+                    Login here
+                </a>
+            </p>
+        </div>
+
+        <div id="profile-view" class="app-view max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6 hidden">
+            <h2 class="text-3xl font-bold text-red-600 border-b pb-3 mb-4">Your Donor Profile</h2>
+            
+            <div id="donor-status-display" class="bg-red-50 p-6 rounded-lg border border-red-200">
+                <p class="text-gray-500">Loading donor profile...</p>
+            </div>
+            
+            <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                <p class="text-sm text-gray-600 mb-4">
+                    Thank you for donating! We rely on you to accurately record your donations.
+                    <span id="user-id-display" class="block mt-1 font-mono text-xs text-gray-400">User ID: N/A</span>
+                </p>
+                <button onclick="recordDonation()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-md text-base font-semibold text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                    Record Latest Donation
+                </button>
+                <p class="text-xs text-red-500 mt-2 text-center">Note: A donation must be recorded at least 56 days after the last one.</p>
+            </div>
+            
+            <button onclick="showView('search-view')" class="w-full flex justify-center py-2 px-4 rounded-md text-sm font-medium text-red-600 bg-white border border-red-600 hover:bg-red-50 transition-colors">
+                Go to Donor Search
+            </button>
+        </div>
+
+        <div id="search-view" class="app-view space-y-6 hidden">
+            <h2 class="text-3xl font-bold text-red-600">Find Emergency Donors</h2>
+            
+            <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-red-500 flex flex-col sm:flex-row justify-between items-start sm:items-end space-y-4 sm:space-y-0">
+                
+                <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <div>
+                        <label for="search-bloodType" class="block text-sm font-medium text-gray-700">Blood Type Needed:</label>
+                        <select id="search-bloodType" required class="mt-1 block w-40 px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 text-base">
+                            <option value="">Select...</option>
+                            <option value="A+">A+</option>
+                            <option value="A-">A-</option>
+                            <option value="B+">B+</option>
+                            <option value="B-">B-</option>
+                            <option value="AB+">AB+</option>
+                            <option value="AB-">AB-</option>
+                            <option value="O+">O+</option>
+                            <option value="O-">O-</option>
+                        </select>
+                    </div>
+                    <button id="search-donors-btn" class="mt-7 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition-colors disabled:opacity-50" disabled>
+                        Search Donors
+                    </button>
+                </div>
+                
+                <div class="text-right">
+                    <p class="text-xs font-semibold text-gray-500">Live Location Status:</p>
+                    <p id="location-status" class="text-sm font-medium text-gray-500">Tracking inactive.</p>
+                    <p class="text-xs text-gray-400 mt-1">Updates location every few seconds for accuracy.</p>
+                </div>
+            </div>
+
+            <div id="donor-results" class="space-y-4 custom-scrollbar overflow-y-auto max-h-[60vh] bg-white p-4 rounded-xl shadow-inner">
+                <p class="text-gray-500 text-center py-8">Select a blood type and press 'Search Donors' to find nearby eligible donors.</p>
+                </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-gray-800 text-white text-center p-4 mt-auto">
+        <p class="text-sm">LifeDrop: Saving Lives Through Digital Connection | © 2024</p>
+    </footer>
+
+</body>
+</html>
