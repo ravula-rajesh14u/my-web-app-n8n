@@ -108,7 +108,7 @@
 const navigateToDonor = (lat, lng) => {
     if (lat && lng) {
         // CORRECTED Google Maps URL for coordinates:
-        const googleMapsUrl = `https://maps.google.com/maps?q=${lat},${lng}`; // <-- This is the fix!
+         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`; // <-- This is the fix!
         window.open(googleMapsUrl, '_blank');
     } // ...
 };
