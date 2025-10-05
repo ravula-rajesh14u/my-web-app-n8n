@@ -193,7 +193,7 @@ const navigateToDonor = (lat, lng) => {
                 }
                 
                 await sendPasswordResetEmail(auth, email);
-                showMessage(`Password reset link sent to ${email}. Check your inbox!`, 'success');
+                showMessage(`Password reset link sent to ${email}. Check your inbox! if yuou cant find it in inbox search for in spam `, 'success');
             } catch (error) {
                 console.error("Password reset failed:", error);
                 showMessage(`Password reset failed: ${error.message}`, 'error');
