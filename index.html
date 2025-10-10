@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,144 +6,191 @@
     <title>LifeDrop Blood Donor App</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #fca5a5; /* Red-300 */
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background-color: #fef2f2; /* Red-50 */
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .app-view { min-height: calc(100vh - 8rem); }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <nav class="bg-white shadow-md">
+<body class="bg-gray-50 min-h-screen">
+    <!-- Custom Modal for Donation Management - FIX 1 -->
+    <div id="donation-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm space-y-4 transform transition-all duration-300 scale-100">
+            <h3 class="text-xl font-bold text-red-600 border-b pb-2">Donation History Management</h3>
+            <p class="text-gray-700 text-sm">Select the action you wish to perform on your donation count:</p>
+            <div class="space-y-3">
+                <button onclick="handleDonationAdjustment('record')" class="w-full py-3 px-4 rounded-lg shadow-lg text-base font-semibold text-white bg-green-600 hover:bg-green-700 transition duration-150">
+                    Record New Donation Today
+                </button>
+                <button onclick="handleDonationAdjustment('decrement')" class="w-full py-3 px-4 rounded-lg shadow-lg text-base font-semibold text-gray-800 border border-yellow-500 bg-yellow-100 hover:bg-yellow-200 transition duration-150">
+                    Undo Last Donation (-1)
+                </button>
+                 <button onclick="handleDonationAdjustment('reset')" class="w-full py-3 px-4 rounded-lg shadow-lg text-base font-semibold text-white bg-red-600 hover:bg-red-700 transition duration-150">
+                    Reset Count to 0 (Mistake)
+                </button>
+            </div>
+            <button onclick="document.getElementById('donation-modal').classList.add('hidden')" class="w-full text-sm text-gray-500 hover:text-gray-700 transition duration-150 mt-2">
+                Cancel
+            </button>
+        </div>
+    </div>
+    <!-- End Custom Modal -->
+
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow-lg sticky top-0 z-10">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex-shrink-0 flex items-center">
                     <span class="text-2xl font-bold text-red-600">🩸 LifeDrop</span>
                 </div>
                 
-                <div class="hidden md:flex md:space-x-8" id="main-nav-links">
-                    <button onclick="showView('search-view')" class="text-gray-900 hover:text-red-600 px-3 py-2 rounded-md text-sm font-medium">Search</button>
-                    <button onclick="showView('profile-view')" class="text-gray-900 hover:text-red-600 px-3 py-2 rounded-md text-sm font-medium">Profile</button>
-                    <button onclick="showView('admin-view')" class="text-gray-900 hover:text-red-600 px-3 py-2 rounded-md text-sm font-medium hidden" id="nav-admin-link">Admin</button>
-                </div>
+                <div class="flex items-center space-x-6" id="main-nav-links">
+                    <button onclick="showView('search-view')" class="text-gray-900 hover:text-red-600 px-3 py-2 rounded-md text-sm font-medium transition duration-150">Search</button>
+                    <button onclick="showView('profile-view')" class="text-gray-900 hover:text-red-600 px-3 py-2 rounded-md text-sm font-medium transition duration-150">Profile</button>
+                    
+                    <!-- NEW: Admin Dashboard Link -->
+                    <button id="admin-nav-btn" onclick="showView('admin-view')" class="text-white bg-red-800 hover:bg-red-900 px-3 py-2 rounded-md text-sm font-medium transition duration-150 hidden">Admin Dashboard</button>
 
-                <div class="flex items-center space-x-4">
-                    <span class="text-sm text-gray-600" id="user-email-display"></span>
-                    <button id="nav-register-btn" onclick="showView('register-view')" class="px-3 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-md hover:bg-red-50 hidden">Register</button>
-                    <button id="nav-login-btn" onclick="showView('login-view')" class="px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 hidden">Login</button>
-                    <button id="logout-btn" class="px-3 py-2 text-sm font-medium text-white bg-gray-500 rounded-md hover:bg-gray-600 hidden">Logout</button>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm text-gray-600 truncate max-w-[150px]" id="user-email-display"></span>
+                        <button id="nav-login-btn" onclick="showView('login-view')" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700 transition duration-150 hidden">Login</button>
+                        <button id="logout-btn" onclick="logoutHandler()" class="px-4 py-2 text-sm font-medium text-white bg-gray-500 rounded-lg shadow-md hover:bg-gray-600 transition duration-150 hidden">Logout</button>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto p-8">
-        <div id="message-container" class="fixed top-20 right-8 z-50"></div>
+    <main class="max-w-7xl mx-auto p-4 sm:p-8">
+        <div id="message-container" class="fixed top-20 right-4 z-50"></div>
         
-        <div id="login-view" class="app-view max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6">
+        <!-- Login View -->
+        <div id="login-view" class="app-view max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6 hidden">
             <h2 class="text-3xl font-extrabold text-gray-900 text-center">Donor Login</h2>
             <form id="login-form" class="space-y-4">
                 <div>
                     <label for="login-email" class="block text-sm font-medium text-gray-700">Email Address</label>
-                    <input type="email" id="login-email" name="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    <input type="email" id="login-email" name="email" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 transition duration-150">
                 </div>
                 <div>
                     <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
-                    <input type="password" id="login-password" name="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500">
+                    <div class="relative mt-1">
+                        <input type="password" id="login-password" name="password" required class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 pr-12 transition duration-150">
+                        <!-- FIX 6: Eye Symbol (Password Toggle) -->
+                        <button type="button" onclick="togglePasswordVisibility('login-password')" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-red-600 transition duration-150">
+                            <!-- Eye Icon SVG (Visible) -->
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="login-password-toggle-on"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <!-- Eye Off Icon SVG (Hidden) -->
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="login-password-toggle-off" class="hidden"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.14 13.14 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.08-1.09"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                        </button>
+                    </div>
                 </div>
-                <button type="submit" class="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">Sign In</button>
+                <button type="submit" class="w-full py-3 px-4 border border-transparent rounded-lg shadow-lg text-base font-semibold text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-150">Sign In</button>
             </form>
-            <p class="text-center text-sm">Don't have an account? <a href="#" onclick="showView('register-view')" class="text-red-600 hover:text-red-500 font-medium">Register here</a></p>
-             <p class="text-center text-sm"><a href="#" onclick="forgotPassword()" class="text-blue-600 hover:text-blue-500 font-medium">Forgot Password?</a></p>
+            <p class="text-center text-sm space-x-1">
+                <span>Don't have an account?</span> 
+                <!-- FIX 9: Register Redirection -->
+                <a href="#" onclick="showView('register-view')" class="text-red-600 hover:text-red-500 font-medium transition duration-150">Register here</a>
+            </p>
+            <!-- FIX 5: Forgot Password -->
+             <p class="text-center text-sm"><a href="#" onclick="forgotPassword()" class="text-blue-600 hover:text-blue-500 font-medium transition duration-150">Forgot Password?</a></p>
         </div>
 
+        <!-- Registration View -->
         <div id="register-view" class="app-view hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6">
             <h2 class="text-3xl font-extrabold text-gray-900 text-center">New Donor Registration</h2>
+            <!-- FIX 10: Mandatory Phone Number -->
             <form id="register-form" class="space-y-4">
-                <div><label for="register-name" class="block text-sm font-medium text-gray-700">Full Name</label><input type="text" id="register-name" name="name" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></div>
-                <div><label for="register-email" class="block text-sm font-medium text-gray-700">Email</label><input type="email" id="register-email" name="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></div>
-                <div><label for="register-phone" class="block text-sm font-medium text-gray-700">Phone Number</label><input type="tel" id="register-phone" name="phoneNumber" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></div>
-                <div><label for="register-bloodType" class="block text-sm font-medium text-gray-700">Blood Type</label><select id="register-bloodType" name="bloodType" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"><option value="">Select Type</option><option value="O+">O+</option><option value="O-">O-</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option></select></div>
-                <div><label for="register-password" class="block text-sm font-medium text-gray-700">Password</label><input type="password" id="register-password" name="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></div>
-                <button type="submit" class="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700">Register</button>
+                <div><label for="register-name" class="block text-sm font-medium text-gray-700">Full Name</label><input type="text" id="register-name" name="name" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg"></div>
+                <div><label for="register-email" class="block text-sm font-medium text-gray-700">Email</label><input type="email" id="register-email" name="email" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg"></div>
+                <div><label for="register-phone" class="block text-sm font-medium text-gray-700">Phone Number</label><input type="tel" id="register-phone" name="phoneNumber" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg"></div>
+                <div><label for="register-bloodType" class="block text-sm font-medium text-gray-700">Blood Type</label><select id="register-bloodType" name="bloodType" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg"><option value="">Select Type</option><option value="O+">O+</option><option value="O-">O-</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option></select></div>
+                <div><label for="register-password" class="block text-sm font-medium text-gray-700">Password</label><input type="password" id="register-password" name="password" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg"></div>
+                <button type="submit" class="w-full py-3 px-4 rounded-lg shadow-lg text-base font-semibold text-white bg-red-600 hover:bg-red-700 transition duration-150">Register</button>
             </form>
-            <p class="text-center text-sm">Already registered? <a href="#" onclick="showView('login-view')" class="text-red-600 hover:text-red-500 font-medium">Login here</a></p>
+            <p class="text-center text-sm">Already registered? <a href="#" onclick="showView('login-view')" class="text-red-600 hover:text-red-500 font-medium transition duration-150">Login here</a></p>
         </div>
 
+        <!-- Search View (Requester View) -->
         <div id="search-view" class="app-view hidden">
             <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Emergency Blood Request</h2>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Request Submission Panel (Left Side) -->
                 <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-2xl space-y-4">
-                    <h3 class="text-xl font-bold text-red-600 mb-4">1. Request Details</h3>
+                    <h3 class="text-xl font-bold text-red-600 mb-4 border-b pb-2">1. Request Details</h3>
                     
                     <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
                         <span class="text-sm font-medium text-gray-700">Location Status:</span>
-                        <span id="location-status" class="text-sm text-yellow-600">Starting location tracker...</span>
+                        <span id="location-status" class="text-sm text-yellow-600 font-semibold">Location tracking inactive.</span>
                     </div>
 
                     <div>
                         <label for="search-bloodType" class="block text-sm font-medium text-gray-700">Blood Type Needed</label>
-                        <select id="search-bloodType" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500">
+                        <select id="search-bloodType" class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-red-500 focus:border-red-500 transition duration-150">
                             <option value="">Select Type</option><option value="O+">O+</option><option value="O-">O-</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option>
                         </select>
                     </div>
 
-                    <button id="submit-request-btn" class="w-full py-3 px-4 rounded-md shadow-lg text-lg font-bold text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400" disabled>
+                    <button id="submit-request-btn" onclick="handleDonorRequest()" class="w-full py-3 px-4 rounded-lg shadow-lg text-lg font-bold text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400 transition duration-150" disabled>
                         Submit Urgent Request
                     </button>
                     
-                    <div id="request-status-message" class="mt-6">
-                        </div>
+                    <div id="request-status-message" class="mt-6"></div>
 
                     <h3 class="text-xl font-bold text-green-600 mt-6 border-t pt-4">2. Donor Responses</h3>
-                    <div id="response-results" class="space-y-4 min-h-[100px] bg-green-50 p-4 rounded-lg">
+                    <div id="response-results" class="space-y-4 min-h-[100px] bg-green-50 p-4 rounded-lg border border-green-200">
                         <p class="text-center text-gray-500 py-4">Track donor responses here.</p>
                     </div>
                 </div>
 
+                <!-- Potential Donors Panel (Right Side) - FIX 2 -->
                 <div class="bg-white p-6 rounded-xl shadow-2xl space-y-4">
-                    <div id="potential-donors" class="space-y-2 min-h-[300px]">
-                         <p class="text-center text-gray-500 py-4">Submit a request to see potential donors.</p>
+                     <h3 class="text-xl font-bold text-blue-600 mb-4 border-b pb-2">Potential Donors Notified</h3>
+                    <div id="potential-donors" class="space-y-3 min-h-[300px]">
+                         <p class="text-center text-gray-500 py-4">Submit a request above to notify nearby donors.</p>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Profile View -->
         <div id="profile-view" class="app-view hidden max-w-xl mx-auto bg-white p-8 rounded-xl shadow-2xl space-y-6">
             <h2 class="text-3xl font-extrabold text-gray-900 text-center mb-6">Your Donor Profile</h2>
+            <!-- FIX 8: Donor Details with Edit/Save -->
             <div id="donor-status-display" class="space-y-4">
+                <div class="p-6 rounded-lg border-l-4 border-red-500 shadow-md bg-red-50">
+                    <p class="text-center text-gray-500">Loading profile data...</p>
                 </div>
-            <button onclick="recordDonation()" class="w-full py-3 px-4 border border-transparent rounded-md shadow-lg text-lg font-bold text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+            </div>
+
+            <div class="flex justify-end">
+                <button id="edit-profile-btn" onclick="toggleEditMode()" class="flex items-center space-x-2 py-2 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
+                    <!-- Edit Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                    <span>Edit Profile</span>
+                </button>
+                 <button id="save-profile-btn" onclick="saveProfileChanges()" class="hidden flex items-center space-x-2 py-2 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition duration-150">
+                    <!-- Save Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    <span>Save Changes</span>
+                </button>
+            </div>
+            
+            <button onclick="recordDonation()" class="w-full py-3 px-4 border border-transparent rounded-lg shadow-lg text-lg font-bold text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150">
                 Record New Donation
             </button>
         </div>
 
-        <div id="admin-view" class="app-view hidden">
-            <h2 class="text-3xl font-extrabold text-gray-900 mb-6">Admin Dashboard</h2>
-            <div id="admin-requests" class="space-y-6">
-                </div>
+        <!-- NEW: Admin View -->
+        <div id="admin-view" class="app-view hidden max-w-4xl mx-auto">
+            <h2 class="text-3xl font-extrabold text-red-700 mb-6">Admin Dashboard - All Active Requests</h2>
+            <div id="admin-requests-list" class="bg-white p-6 rounded-xl shadow-2xl space-y-4 min-h-[300px]">
+                <p class="text-center text-gray-500 py-4">Loading active requests...</p>
+            </div>
         </div>
+
     </main>
 
     <script type="module">
-        const GOOGLE_MAPS_API_KEY = 'AIzaSyAbcunNYa1fkdtOQ0IoORwz-dodW2kyhV4';
-        const INITIAL_ADMIN_EMAIL = 'rajeshgoudravula1423@gmail.com'; 
-        const MAX_DONORS_TO_NOTIFY = 20; 
-        const INITIAL_SEARCH_RADIUS_KM = 10; 
-        const RADIUS_INCREASE_KM = 10;
-        const MAX_SEARCH_RADIUS_KM = 50; 
-        const RETRY_INTERVAL_MS = 60000; 
-
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, increment, addDoc, query, where, getDocs, updateDoc, getDoc, deleteDoc, GeoPoint } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
-        import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-messaging.js";
-
         const FALLBACK_FIREBASE_CONFIG = {
             apiKey: "AIzaSyAbcunNYa1fkdtOQ0IoORwz-dodW2kyhV4",
             authDomain: "blooddonar-app-71fb5.firebaseapp.com",
@@ -153,27 +200,35 @@
             appId: "1:652032534017:web:bb73ce54cd5ea6c8904200",
             measurementId: "G-NEKHBBJQY2"
         };
+        const MIN_DAYS_BETWEEN_DONATIONS = 56;
+        const MIN_MS_BETWEEN_DONATIONS = MIN_DAYS_BETWEEN_DONATIONS * 24 * 60 * 60 * 1000;
+        const INITIAL_SEARCH_RADIUS_KM = 10; 
+        const RADIUS_INCREASE_KM = 10;
+        const MAX_SEARCH_RADIUS_KM = 50; 
+        const RETRY_INTERVAL_MS = 60000; 
+        const MAX_DONORS_TO_NOTIFY = 20; 
+        const APP_ID_PATH = 'lifedrop-default-id'; // Hardcoded path component for Firestore collections
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, updatePassword } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, increment, addDoc, query, GeoPoint, updateDoc, getDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
 
         let firebaseConfig = FALLBACK_FIREBASE_CONFIG;
-        window.firebaseConfig = firebaseConfig; 
-
-        let app, db, auth, messaging;
+        let app, db, auth;
         let currentUserId = null;
         let currentUserData = null;
         let donorData = [];
         let userLocation = { lat: null, lng: null };
-        let isAdminUser = false; 
         let currentActiveRequest = null; 
         let responseUnsubscribe = null; 
         let retryTimeout = null;
         let currentSearchRadius = INITIAL_SEARCH_RADIUS_KM; 
         let currentDonorsNotified = []; 
-        
-        const MIN_DAYS_BETWEEN_DONATIONS = 56;
-        const MIN_MS_BETWEEN_DONATIONS = MIN_DAYS_BETWEEN_DONATIONS * 24 * 60 * 60 * 1000;
-        
+        let activeNotifications = []; 
+        let adminIds = []; // NEW: Array to hold UIDs of admin users
+
         const calculateDistance = (lat1, lon1, lat2, lon2) => {
-            const R = 6371; 
+            const R = 6371; // Earth radius in km
             const dLat = (lat2 - lat1) * (Math.PI / 180);
             const dLon = (lon2 - lon1) * (Math.PI / 180);
             const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -182,41 +237,57 @@
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
         };
-        window.calculateDistance = calculateDistance;
 
         const showMessage = (message, type = 'info') => {
             const container = document.getElementById('message-container');
             const color = type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-blue-500';
-            const html = `<div class="${color} text-white px-4 py-2 rounded-lg shadow-lg mb-4 text-sm">${message}</div>`;
-            container.innerHTML = html;
-            container.style.display = 'block';
-            setTimeout(() => { container.innerHTML = ''; container.style.display = 'none'; }, 5000);
+            const html = `<div class="${color} text-white px-4 py-2 rounded-lg shadow-lg mb-3 text-sm transition-opacity duration-300">${message}</div>`;
+            container.insertAdjacentHTML('beforeend', html);
+            const lastMessage = container.lastElementChild;
+            setTimeout(() => { lastMessage.style.opacity = '0'; }, 4500);
+            setTimeout(() => { container.removeChild(lastMessage); }, 5000);
         };
         window.showMessage = showMessage;
-
-        const updateHeaderUI = (loggedIn) => {
-            document.getElementById('nav-register-btn').classList.toggle('hidden', loggedIn);
-            document.getElementById('nav-login-btn').classList.toggle('hidden', loggedIn);
-            document.getElementById('logout-btn').classList.toggle('hidden', !loggedIn);
-            document.getElementById('nav-admin-link').classList.toggle('hidden', !isAdminUser);
-            document.getElementById('main-nav-links').classList.toggle('hidden', !loggedIn);
-        };
         
-        const clearRetryTimeout = () => {
-            if (retryTimeout) {
-                clearTimeout(retryTimeout);
-                retryTimeout = null;
+        window.togglePasswordVisibility = (inputId) => {
+            const passwordInput = document.getElementById(inputId);
+            const toggleOn = document.getElementById(`${inputId}-toggle-on`);
+            const toggleOff = document.getElementById(`${inputId}-toggle-off`);
+
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleOn.classList.add('hidden');
+                toggleOff.classList.remove('hidden');
+            } else {
+                passwordInput.type = 'password';
+                toggleOn.classList.remove('hidden');
+                toggleOff.classList.add('hidden');
             }
         };
 
+        const isAdminUser = () => {
+            return currentUserId && adminIds.includes(currentUserId);
+        };
+
+        const updateHeaderUI = (loggedIn) => {
+            document.getElementById('nav-login-btn').classList.toggle('hidden', loggedIn);
+            document.getElementById('logout-btn').classList.toggle('hidden', !loggedIn);
+            document.getElementById('user-email-display').textContent = loggedIn ? auth.currentUser.email : '';
+            
+            // NEW: Show/Hide Admin Button
+            document.getElementById('admin-nav-btn').classList.toggle('hidden', !isAdminUser());
+        };
+        
         window.logoutHandler = async () => {
              if (responseUnsubscribe) { responseUnsubscribe(); responseUnsubscribe = null; } 
-             clearRetryTimeout();
+             if (retryTimeout) { clearTimeout(retryTimeout); retryTimeout = null; }
              currentActiveRequest = null;
              currentDonorsNotified = [];
+             activeNotifications = [];
              try {
                 await signOut(auth);
                 showMessage("Logged out successfully.", 'success');
+                showView('login-view');
             } catch (error) {
                 console.error("Logout Error:", error);
                 showMessage("Logout failed. Please try again.", 'error');
@@ -228,77 +299,60 @@
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
-                try { messaging = getMessaging(app); } catch (e) { console.warn('FCM init skipped:', e); }
+                
+                // NEW: Start Admin Listener immediately
+                setupAdminListener();
 
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentUserId = user.uid;
-                        
-                        const checkAdminStatus = async (uid) => {
-                            if (!db || !uid) return false;
-                            const adminDocRef = doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'admins', uid);
-                            const docSnap = await getDoc(adminDocRef);
-                            return docSnap.exists();
-                        };
-                        isAdminUser = await checkAdminStatus(user.uid);
-                        
-                        // FIX 1: Ensure initial admin setup happens before deciding the view
-                        if (!isAdminUser && user.email === INITIAL_ADMIN_EMAIL) {
-                            await setDoc(doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'admins', user.uid), { email: user.email, addedAt: Date.now() });
-                            isAdminUser = true; 
-                        }
-
-                        document.getElementById('user-email-display').textContent = `Logged in: ${user.email}`; 
-                        updateHeaderUI(true); 
                         setupDonorListener();
                         setupCurrentUserListener(user.email); 
-
-                        // Decide which view to show based on final isAdminUser status
-                        if (isAdminUser) {
-                            showView('admin-view');
-                        } else {
-                            showView('search-view');
+                        
+                        const currentView = document.querySelector('.app-view:not(.hidden)');
+                        if (!currentView || currentView.id === 'login-view' || currentView.id === 'register-view') {
+                             showView('profile-view');
                         }
 
                     } else {
-                        currentUserId = null; currentUserData = null; isAdminUser = false;
-                        document.getElementById('user-email-display').textContent = ``; 
+                        currentUserId = null; currentUserData = null; 
                         updateHeaderUI(false); 
-                        showView('login-view'); // Default to login if logged out
+                        showView('search-view'); 
                     }
+                     // Update UI after admin check is complete
+                    updateHeaderUI(!!user); 
                 });
 
             } catch (err) {
                 console.error('Firebase init error', err);
-                showMessage('Failed to initialize Firebase. Check console.', 'error');
+                showMessage('Failed to initialize Firebase.', 'error');
             }
         };
-
+        
         let locationWatchId = null;
         const startLocationTracking = () => {
             if (locationWatchId !== null) return;
             const status = document.getElementById('location-status');
             status.textContent = 'Attempting to acquire live location...';
-            status.classList.remove('text-red-500', 'text-green-500'); status.classList.add('text-yellow-600');
+            status.className = 'text-sm text-yellow-600 font-semibold';
             
             locationWatchId = navigator.geolocation.watchPosition(async (pos)=>{
                 userLocation.lat = pos.coords.latitude; userLocation.lng = pos.coords.longitude;
                 status.textContent = `Tracking Active: ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`;
-                status.classList.remove('text-yellow-600', 'text-red-500'); status.classList.add('text-green-500');
+                status.className = 'text-sm text-green-600 font-semibold';
                 document.getElementById('submit-request-btn').disabled = false;
                 
                 if (currentUserId && db) {
-                    const donorDocRef = doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'donors', currentUserId);
+                    const donorDocRef = doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'donors', currentUserId);
                     await setDoc(donorDocRef, { 
                         location: new GeoPoint(userLocation.lat, userLocation.lng), 
-                        lastUpdated: Date.now(), 
                         lastLocationUpdateTime: Date.now() 
                     }, { merge: true });
                 }
             }, (err)=>{
                 console.error('loc err', err);
                 status.textContent = 'Location permission denied or unavailable.';
-                status.classList.remove('text-yellow-600', 'text-green-500'); status.classList.add('text-red-500');
+                status.className = 'text-sm text-red-600 font-semibold';
                 document.getElementById('submit-request-btn').disabled = true;
             }, { enableHighAccuracy: true, maximumAge: 0, timeout: 7000 });
         };
@@ -309,122 +363,75 @@
                 locationWatchId=null; 
             } 
             const status = document.getElementById('location-status');
-            if(status) status.textContent='Location tracking stopped.'; 
+            if(status) {
+                status.textContent='Location tracking inactive.';
+                status.className = 'text-sm text-gray-500 font-semibold';
+            }
         };
-        
+
         const renderPotentialDonors = () => {
             const container = document.getElementById('potential-donors');
-            if (currentDonorsNotified.length === 0 && currentActiveRequest) {
-                 container.innerHTML = `<p class="text-center text-gray-500 py-4">No eligible donors found within ${currentSearchRadius} km.</p>`;
-                 return;
-            }
             if (!currentActiveRequest) {
-                 container.innerHTML = `<p class="text-center text-gray-500 py-4">Submit a request to see potential donors.</p>`;
+                 container.innerHTML = `<p class="text-center text-gray-500 py-4">Submit a request above to notify nearby donors.</p>`;
                  return;
             }
             
-            let html = `<h4 class="text-lg font-semibold text-red-600 mb-3 border-b pb-2">Notified Potential Donors (${currentDonorsNotified.length} within ${currentSearchRadius} km)</h4>`;
+            let html = `<h4 class="text-lg font-semibold text-blue-600 mb-3 border-b pb-2">Notified Donors (${currentDonorsNotified.length} within ${currentSearchRadius} km)</h4>`;
 
-            currentDonorsNotified.forEach(d => {
-                const distanceText = d.distance !== Infinity ? `${d.distance.toFixed(2)} km` : 'Distance Unknown';
-                html += `<div class="p-3 bg-red-50 rounded-lg mb-2 shadow-sm border-l-4 border-red-300">
-                    <p class="text-md font-bold text-gray-800">${d.name || 'Anonymous'}</p>
-                    <p class="text-sm text-gray-600">Type: ${d.bloodType} | Distance: ${distanceText}</p>
-                    <p class="text-xs text-gray-500">Contact: ${d.phoneNumber || 'N/A'}</p>
-                </div>`;
-            });
-            container.innerHTML = html;
-        };
-
-        const startResponseListener = (requestId) => {
-            if (responseUnsubscribe) { responseUnsubscribe(); } 
-
-            const responsesColRef = collection(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'requests', requestId, 'responses');
-            
-            responseUnsubscribe = onSnapshot(responsesColRef, (snapshot) => {
-                const responseContainer = document.getElementById('response-results');
-                
-                if (snapshot.empty) {
-                    responseContainer.innerHTML = `<p class="text-center text-gray-500 py-4">Waiting for donors to respond...</p>`;
-                    return;
-                }
-
-                clearRetryTimeout();
-                document.getElementById('request-status-message').innerHTML = `<div class="p-4 bg-green-600 text-white rounded-lg shadow-md mb-4 text-center">
-                    <p class="font-bold text-xl">Success! Donor Response Received!</p>
-                </div>`;
-
-                let responseHtml = `<h4 class="text-lg font-semibold text-green-600 mb-3 border-b pb-2">Donors Ready to Help! (Positive Responses)</h4>`;
-
-                snapshot.docs.forEach(docSnap => {
-                    const r = docSnap.data();
-                    const distanceText = r.distanceKm ? `${r.distanceKm.toFixed(2)} km away (at time of response)` : 'Distance Unknown';
+            if (currentDonorsNotified.length === 0) {
+                 html += `<p class="text-center text-gray-500 py-4">No eligible donors found within ${currentSearchRadius} km.</p>`;
+            } else {
+                currentDonorsNotified.forEach(d => {
+                    const distanceText = d.distance !== Infinity ? `${d.distance.toFixed(2)} km` : 'Distance Unknown';
                     
-                    const navigateButton = r.location ? 
-                        `<button onclick="navigateToDonor(${r.location.latitude},${r.location.longitude})" class="ml-4 px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md">Get Directions</button>` : 
-                        '<span class="text-xs text-gray-500 ml-4">No Donor Location</span>';
-
-                    responseHtml += `<div class="donor-card bg-green-50 p-5 rounded-xl shadow-lg border-l-4 border-green-500 flex justify-between items-center mb-3">
-                        <div>
-                            <p class="text-xl font-bold text-green-800">${r.name || 'Anonymous'}</p>
-                            <p class="text-sm text-gray-500">Response Time: ${new Date(r.respondedAt).toLocaleTimeString()}</p>
-                            <a href="mailto:${r.email}" class="text-xs text-blue-500 hover:text-blue-700 block">Email: ${r.email}</a>
-                            <a href="tel:${r.phoneNumber}" class="text-xs text-blue-500 hover:text-blue-700 block">Phone: ${r.phoneNumber || 'N/A'}</a>
-                        </div>
-                        <div class="flex items-center">
-                            <div class="text-right mr-3">
-                                <span class="inline-block px-3 py-1 text-sm font-bold text-white bg-red-600 rounded-full">${r.bloodType}</span>
-                                <p class="text-md font-medium text-gray-700 mt-1">${distanceText}</p>
-                            </div>
-                            ${navigateButton}
-                        </div>
+                    // Added Call Button (tel: link)
+                    html += `<div class="p-3 bg-blue-50 rounded-lg mb-2 shadow-sm border-l-4 border-blue-300">
+                        <p class="text-md font-bold text-gray-800">${d.name || 'Anonymous'}</p>
+                        <p class="text-sm text-gray-700">Phone: <span class="font-bold">${d.phoneNumber || 'N/A'}</span></p>
+                        <p class="text-sm text-gray-600">Blood Type: <span class="font-semibold text-red-600">${d.bloodType}</span></p>
+                        <p class="text-sm text-gray-600">Distance: ${distanceText}</p>
+                        <p class="text-xs text-gray-500">Email: ${d.email || 'N/A'}</p>
+                        ${d.phoneNumber ? `<a href="tel:${d.phoneNumber.replace(/[^0-9+]/g, '')}" class="mt-2 inline-block py-1 px-3 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition duration-150">
+                            Call Donor
+                        </a>` : ''}
                     </div>`;
                 });
-
-                responseContainer.innerHTML = responseHtml;
-                showMessage(`New donor response received for Request ID: ${requestId}`, 'success');
-            }, (error) => {
-                console.error("Error listening to responses:", error);
-                document.getElementById('response-results').innerHTML = `<p class="text-center text-red-500 py-4">Error listening for responses. Please check console.</p>`;
-            });
+            }
+            container.innerHTML = html;
         };
+        
+        window.handleDonorRequest = async () => {
+            if (!currentUserId) return showMessage('You must be logged in to submit a request.', 'error');
+            if (!userLocation.lat) return showMessage('Please wait for location tracking to activate.', 'error');
 
-        window.donorReply = async (requestId) => {
-            if (!currentUserId || !currentUserData) {
-                return showMessage("You must be logged in as a donor to reply.", 'error');
-            }
-            if (!userLocation.lat) {
-                return showMessage("Cannot reply: Your location is unknown. Please start tracking.", 'error');
+            const requestedBloodType = document.getElementById('search-bloodType').value;
+
+            if (!requestedBloodType) { 
+                return showMessage('Please select a blood type.', 'error'); 
             }
             
-            const confirmReply = confirm(`A patient nearby needs blood! Are you ready to donate and share your contact details for request ID: ${requestId}?`);
-            if (!confirmReply) return;
-
-            const requestDocRef = doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'requests', requestId);
-            const responseDocRef = doc(requestDocRef, 'responses', currentUserId);
+            if (retryTimeout) clearTimeout(retryTimeout);
+            currentSearchRadius = INITIAL_SEARCH_RADIUS_KM; 
             
-            const requestSnap = await getDoc(requestDocRef);
-            let distanceKm = null;
-            if (requestSnap.exists() && requestSnap.data().location) {
-                const reqLoc = requestSnap.data().location;
-                distanceKm = calculateDistance(userLocation.lat, userLocation.lng, reqLoc.latitude, reqLoc.longitude);
-            }
-
             try {
-                await setDoc(responseDocRef, {
-                    uid: currentUserId,
-                    name: currentUserData.name || 'Anonymous',
-                    email: currentUserData.email,
-                    phoneNumber: currentUserData.phoneNumber || 'N/A',
-                    bloodType: currentUserData.bloodType,
+                const docRef = await addDoc(collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'requests'), {
+                    requesterId: currentUserId,
+                    bloodType: requestedBloodType,
                     location: new GeoPoint(userLocation.lat, userLocation.lng),
-                    distanceKm: distanceKm,
-                    respondedAt: Date.now()
+                    initialRadiusKm: INITIAL_SEARCH_RADIUS_KM, 
+                    createdAt: Date.now(),
+                    status: 'active'
                 });
-                showMessage("Thank you! Your positive response and details have been shared with the requester.", 'success');
-            } catch (e) {
-                showMessage("Failed to record your response.", 'error');
-                console.error("Reply Error:", e);
+                
+                currentActiveRequest = docRef.id; 
+                startResponseListener(currentActiveRequest);
+                await sendNotification(requestedBloodType, currentSearchRadius, currentActiveRequest);
+
+                document.getElementById('response-results').innerHTML = `<p class="text-center text-gray-500 py-4">Waiting for donors to respond...</p>`;
+
+            } catch (error) {
+                showMessage(`Request failed: ${error.message}`, 'error');
+                console.error(error);
             }
         };
 
@@ -444,21 +451,30 @@
             renderPotentialDonors();
 
             try {
-                const requestDocRef = doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'requests', requestId);
+                // 1. Update the Request Document
+                const requestDocRef = doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'requests', requestId);
                 await updateDoc(requestDocRef, {
                     bloodType: requestedBloodType,
-                    location: new GeoPoint(userLocation.lat, userLocation.lng),
                     radiusKm, 
                     notifiedCount: donorsToNotify.length,
                     lastNotificationSent: Date.now(),
                 });
                 
-                console.log(`--- SIMULATED NOTIFICATION ---`);
-                console.log(`Request ID: ${requestId}. Notifications sent at radius ${radiusKm}km to ${donorsToNotify.length} donors.`);
-                if (donorsToNotify.length > 0) {
-                    console.log(`To simulate a donor response, run: window.donorReply('${requestId}') in the console.`);
-                    console.log(`Donors Notified (Top ${donorsToNotify.length} within ${radiusKm}km):`, donorsToNotify.map(d=>`${d.name} (${d.distance.toFixed(2)}km)`));
-                }
+                // 2. CREATE NOTIFICATION DOCUMENTS 
+                const notificationsColRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'notifications');
+                const notificationPromises = donorsToNotify.map(d => {
+                    return addDoc(notificationsColRef, {
+                        recipientUid: d.uid, // The donor being notified
+                        requestorUid: currentUserId,
+                        requestId: requestId,
+                        bloodType: requestedBloodType,
+                        donorLocation: d.location,
+                        requestorLocation: new GeoPoint(userLocation.lat, userLocation.lng),
+                        sentAt: Date.now(),
+                        status: 'pending', // Initial status
+                    });
+                });
+                await Promise.all(notificationPromises);
                 
                 document.getElementById('request-status-message').innerHTML = `<div class="p-4 bg-red-600 text-white rounded-lg shadow-md mb-4 text-center">
                     <p class="font-bold text-lg">Request Active! (${requestedBloodType})</p>
@@ -474,7 +490,7 @@
                     showMessage(`No donors found within max radius of ${MAX_SEARCH_RADIUS_KM} km. Request will remain active.`, 'error');
                     document.getElementById('request-status-message').innerHTML = `<div class="p-4 bg-yellow-600 text-white rounded-lg shadow-md mb-4 text-center">
                         <p class="font-bold text-lg">Warning! No Donors Found!</p>
-                        <p class="text-sm">Max radius reached (${MAX_SEARCH_RADIUS_KM} km). Request remains active, but no further automated notifications will be sent.</p>
+                        <p class="text-sm">Max radius reached (${MAX_SEARCH_RADIUS_KM} km). Request remains active.</p>
                     </div>`;
                 }
 
@@ -484,325 +500,445 @@
             }
         };
 
-        window.handleDonorRequest = async () => {
-            if (!currentUserId) return showMessage('You must be logged in to submit a request.', 'error');
-            if (!userLocation.lat) return showMessage('Please wait for location tracking to activate.', 'error');
-
-            const requestedBloodType = document.getElementById('search-bloodType').value;
-
-            if (!requestedBloodType) { 
-                return showMessage('Please select a blood type.', 'error'); 
-            }
-            
-            clearRetryTimeout();
-            currentSearchRadius = INITIAL_SEARCH_RADIUS_KM; 
-            
-            try {
-                const docRef = await addDoc(collection(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'requests'), {
-                    requesterId: currentUserId,
-                    bloodType: requestedBloodType,
-                    location: new GeoPoint(userLocation.lat, userLocation.lng),
-                    initialRadiusKm: INITIAL_SEARCH_RADIUS_KM, 
-                    createdAt: Date.now(),
-                    status: 'active'
-                });
-                
-                currentActiveRequest = docRef.id; 
-                startResponseListener(currentActiveRequest);
-                
-                await sendNotification(requestedBloodType, currentSearchRadius, currentActiveRequest);
-
-                document.getElementById('response-results').innerHTML = `<p class="text-center text-gray-500 py-4">Waiting for donors to respond...</p>`;
-
-            } catch (error) {
-                showMessage(`Request failed: ${error.message}`, 'error');
-                console.error(error);
-            }
-        };
-        window.handleDonorRequest = handleDonorRequest;
-
-        window.navigateToDonor = (lat, lng) => {
-            if (!userLocation.lat) {
-                return showMessage('Cannot navigate: Your location is not yet known.', 'error');
-            }
-            // Uses a standard Google Maps URL format for directions
-            const url = `https://www.google.com/maps/dir/${userLocation.lat},${userLocation.lng}/${lat},${lng}`;
-            window.open(url, '_blank');
-        };
-
-        const registerHandler = async (e) => {
-            e.preventDefault();
-            const name = e.target.name.value; 
-            const email = e.target.email.value; 
-            const phoneNumber = e.target.phoneNumber.value; 
-            const bloodType = e.target.bloodType.value; 
-            const password = e.target.password.value;
-            if (!auth) { showMessage('Auth not ready', 'error'); return; }
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-                // Use a nearby Hyderabad coordinate as a fallback if location isn't ready
-                const lat = userLocation.lat || (17.3850 + (Math.random()-0.5)*0.1); 
-                const lng = userLocation.lng || (78.4867 + (Math.random()-0.5)*0.1); 
-                
-                await setDoc(doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'donors', user.uid), { 
-                    uid: user.uid, 
-                    name, 
-                    email, 
-                    phoneNumber, 
-                    bloodType, 
-                    location: new GeoPoint(lat, lng), 
-                    lastUpdated: Date.now(), 
-                    lastDonationDate: 0, 
-                    donationCount: 0 
-                });
-                showMessage('Registration successful', 'success'); e.target.reset();
-            } catch (err) { console.error(err); showMessage('Registration failed: '+err.message, 'error'); }
-        };
-
-        const loginHandler = async (e) => {
-            e.preventDefault(); const email = e.target.email.value; const password = e.target.password.value; if (!auth) return;
-            try { 
-                await signInWithEmailAndPassword(auth, email, password); 
-                // View switching handled by onAuthStateChanged now for admin fix
-                showMessage('Login successful','success'); e.target.reset(); 
-            } catch(err){ console.error(err); showMessage('Login failed: '+err.message,'error'); }
-        };
-        
-        window.forgotPassword = async () => {
-             const email = prompt("Enter your email address to reset password:");
-             if (email) {
-                 try {
-                     const auth = getAuth();
-                     await sendPasswordResetEmail(auth, email);
-                     showMessage(`Password reset link sent to ${email}`, 'info');
-                 } catch (error) {
-                     showMessage(`Error sending reset email: ${error.message}`, 'error');
-                 }
-             }
-        };
-
-        const setupDonorListener = () => {
-            if (!db) return;
-            const donorsColRef = collection(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'donors');
-            onSnapshot(donorsColRef, (snapshot)=>{
-                donorData = snapshot.docs.map(d=>({...d.data(), uid: d.id, email: d.data().email || 'N/A'})); 
-                if (document.getElementById('admin-view').classList.contains('hidden') === false) renderRequestsForAdmin();
-            }, (err)=>{ console.error('donor listener err', err); });
-        };
-
-        const setupCurrentUserListener = (email) => {
-            if (!db || !currentUserId) return;
-            const userDocRef = doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'donors', currentUserId);
-            // This listener updates currentUserData immediately when a donation is recorded/reset
-            onSnapshot(userDocRef, (snap)=>{ 
-                if (snap.exists()) { 
-                    currentUserData = snap.data(); 
-                    currentUserData.email = email; 
-                    // Call update display here to ensure UI refresh on data change
-                    if (document.getElementById('profile-view').classList.contains('hidden') === false) {
-                       updateDonorStatusDisplay();
-                    }
-                } 
-            });
-        };
-        
-        window.recordDonation = async () => {
-            if (!currentUserId) return;
-            const confirmRecord = confirm("Confirm you have completed a blood donation right now?");
-            if (!confirmRecord) return;
-            
-            const donorDocRef = doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'donors', currentUserId);
-            try {
-                await updateDoc(donorDocRef, {
-                    lastDonationDate: Date.now(),
-                    donationCount: increment(1)
-                });
-                showMessage("Donation recorded! You are now ineligible for 56 days.", 'success');
-                // FIX 2: Manually call update to ensure immediate UI refresh
-                updateDonorStatusDisplay(); 
-            } catch (e) {
-                showMessage("Failed to record donation.", 'error');
-                console.error(e);
-            }
-        };
-
-        window.resetDonationMistake = async () => {
-            if (!currentUserId || !currentUserData) return;
-            const confirmReset = confirm("Are you sure you want to REVERT your last donation and reset your eligibility?");
-            if (!confirmReset) return;
-            
-            const donorDocRef = doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'donors', currentUserId);
-            try {
-                 await updateDoc(donorDocRef, {
-                    lastDonationDate: 0,
-                    donationCount: increment(-1 * (currentUserData.donationCount > 0 ? 1 : 0)) 
-                });
-                showMessage("Donation record reset. You are now eligible to donate.", 'info');
-                // FIX 3: Manually call update to ensure immediate UI refresh
-                updateDonorStatusDisplay();
-            } catch (e) {
-                showMessage("Failed to reset donation status.", 'error');
-                console.error(e);
-            }
-        };
-
-        window.toggleAdminStatus = async (uid, currentEmail, isCurrentlyAdmin) => {
-            if (!isAdminUser) { showMessage('Permission denied.', 'error'); return; }
-
-            const adminDocRef = doc(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'admins', uid);
-
-            if (isCurrentlyAdmin) {
-                const confirmRevoke = confirm(`Are you sure you want to REVOKE admin privileges from ${currentEmail}?`);
-                if (!confirmRevoke) return;
-                try {
-                    await deleteDoc(adminDocRef);
-                    showMessage(`Admin status revoked for ${currentEmail}.`, 'success');
-                } catch(e) { showMessage('Failed to revoke admin status.', 'error'); console.error(e); }
-            } else {
-                const confirmGrant = confirm(`Are you sure you want to GRANT admin privileges to ${currentEmail}?`);
-                if (!confirmGrant) return;
-                try {
-                    await setDoc(adminDocRef, { email: currentEmail, addedByUid: currentUserId, addedAt: Date.now() });
-                    showMessage(`Admin status granted to ${currentEmail}.`, 'success');
-                } catch(e) { showMessage('Failed to grant admin status.', 'error'); console.error(e); }
-            }
-            renderRequestsForAdmin();
-        };
-
-        const renderRequestsForAdmin = async () => {
-            if (!isAdminUser) { 
-                document.getElementById('admin-requests').innerHTML = `<p class="text-center text-red-500 font-bold">Access Denied: You are not an authorized administrator.</p>`;
-                return;
-            }
-
-            const container = document.getElementById('admin-requests'); container.innerHTML = '<p class="text-center text-gray-500">Loading admin metrics...</p>';
-            
-            let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">';
-            
-            const allDonors = donorData; 
-            const totalDonors = allDonors.length;
-            
-            const adminSnaps = await getDocs(collection(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'admins'));
-            const adminUids = adminSnaps.docs.map(d => d.id);
-
-            const donorListHtml = allDonors.map(d => {
-                const isAdmin = adminUids.includes(d.uid);
-                const buttonText = isAdmin ? 'Revoke Admin' : 'Make Admin';
-                const buttonColor = isAdmin ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-red-600 hover:bg-red-700';
-
-                return `<div class="p-3 border-b border-gray-100 flex justify-between items-center">
-                    <div>
-                        <p class="font-semibold">${d.name || 'Anonymous'} (${d.bloodType})</p>
-                        <p class="text-xs text-gray-600">${d.email} | ${d.phoneNumber || 'N/A'}</p>
-                    </div>
-                    ${d.uid !== currentUserId ? `<button onclick="toggleAdminStatus('${d.uid}', '${d.email}', ${isAdmin})" class="text-white text-xs px-3 py-1 rounded ${buttonColor}">${buttonText}</button>` : '<span class="text-xs text-green-600 font-bold">You (Admin)</span>'}
-                </div>`;
-            }).join('');
-
-            html += `<div class="bg-white p-6 rounded-xl shadow-xl space-y-4"><h3 class="text-xl font-bold text-red-600">Total Donors: ${totalDonors}</h3><div class="max-h-96 overflow-y-auto custom-scrollbar">${donorListHtml}</div></div>`;
-
-            const requestsContainer = document.createElement('div');
-            requestsContainer.className = 'bg-white p-6 rounded-xl shadow-xl space-y-4';
-            requestsContainer.innerHTML = `<h3 class="text-xl font-bold text-red-600">Active Blood Requests</h3>`;
-            
-            try {
-                const q = query(collection(db, 'artifacts', 'lifedrop-default-id', 'public', 'data', 'requests'));
-                const snaps = await getDocs(q);
-                
-                if (snaps.empty) { 
-                    requestsContainer.innerHTML += '<p class="text-center text-gray-500">No blood requests found.</p>';
-                } else {
-                    let reqHtml = '';
-                    snaps.forEach(s=>{ 
-                        const r=s.data(); 
-                        const locationText = r.location ? 
-                            `Location: ${r.location.latitude.toFixed(3)}, ${r.location.longitude.toFixed(3)} (${r.radiusKm} km radius)` : 'Location: Unavailable';
-                        
-                        reqHtml += `<div class='p-4 bg-gray-50 rounded mb-3 shadow border-l-4 border-red-500'>
-                            <p class='font-bold text-lg'>${r.bloodType}</p>
-                            <p class='text-xs text-gray-500'>${new Date(r.createdAt).toLocaleString()} | Notified: ${r.notifiedCount || 0} Donors</p>
-                            <p class='text-sm text-gray-700 mt-2'>${locationText}</p>
-                        </div>`; 
+        const startResponseListener = (requestId) => {
+            if (responseUnsubscribe) { responseUnsubscribe(); } 
+            const responsesColRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'requests', requestId, 'responses');
+            responseUnsubscribe = onSnapshot(responsesColRef, (snapshot) => {
+                if (!snapshot.empty) {
+                    if (retryTimeout) clearTimeout(retryTimeout);
+                    document.getElementById('request-status-message').innerHTML = `<div class="p-4 bg-green-600 text-white rounded-lg shadow-md mb-4 text-center">
+                        <p class="font-bold text-xl">Success! Donor Response Received!</p>
+                        <p class="text-sm mt-1">Check the console for donor contact details.</p>
+                    </div>`;
+                    
+                    let responseHtml = `<p class="text-center text-gray-700 py-2 font-semibold border-b mb-2">Confirmed Responses:</p>`;
+                    snapshot.docs.forEach(doc => {
+                        const data = doc.data();
+                         responseHtml += `<div class="p-3 bg-green-100 rounded-lg shadow-sm mb-2">
+                             <p class="text-md font-bold text-gray-800">${data.donorName || 'Donor'}</p>
+                             <p class="text-sm text-gray-700">Blood Type: ${data.bloodType}</p>
+                             <p class="text-sm text-gray-700">Phone: <a href="tel:${data.donorPhone.replace(/[^0-9+]/g, '')}" class="text-blue-600 hover:text-blue-800 font-semibold">${data.donorPhone || 'N/A'}</a></p>
+                             <p class="text-xs text-gray-500">Responded: ${new Date(data.responseAt).toLocaleTimeString()}</p>
+                         </div>`;
                     });
-                    requestsContainer.innerHTML += reqHtml;
+
+                    document.getElementById('response-results').innerHTML = responseHtml;
+
+                } else {
+                    document.getElementById('response-results').innerHTML = `<p class="text-center text-gray-500 py-4">Waiting for donors to respond...</p>`;
                 }
-            } catch(e){ 
-                requestsContainer.innerHTML += `<p class="text-center text-red-500">Failed to load requests.</p>`;
-            }
-            html += requestsContainer.outerHTML;
-
-            html += '</div>';
-            container.innerHTML = html;
-        };
-        
-        const updateDonorStatusDisplay = () => {
-            const statusDiv = document.getElementById('donor-status-display');
-            if (!currentUserData) { statusDiv.innerHTML = '<p class="text-gray-500">Loading donor profile...</p>'; return; }
-            const lastDonationMs = currentUserData.lastDonationDate || 0;
-            const timeSinceDonationMs = Date.now() - lastDonationMs;
-            const daysRemaining = MIN_DAYS_BETWEEN_DONATIONS - Math.floor(timeSinceDonationMs / (24*60*60*1000));
-            const lastDonationDate = lastDonationMs ? new Date(lastDonationMs).toLocaleDateString() : 'Never Recorded';
-            const totalCount = currentUserData.donationCount || 0;
-            const lastLocation = currentUserData.lastLocationUpdateTime ? new Date(currentUserData.lastLocationUpdateTime).toLocaleString() : 'N/A';
-            const emailAddress = currentUserData.email || 'N/A';
-            const phoneNumber = currentUserData.phoneNumber || 'N/A';
-            
-            const donationStatusHtml = daysRemaining>0 ? `<p class='text-lg font-bold text-red-600'>Ineligible to donate</p><p class='text-sm text-red-500'>Wait ${daysRemaining} more days.</p>` : `<p class='text-lg font-bold text-green-600'>Eligible to Donate!</p><p class='text-sm text-green-500'>You have completed the required rest period.</p>`;
-            
-            // The reset button only appears when the donor is ineligible (daysRemaining > 0)
-            const ineligibleButton = daysRemaining > 0 
-                ? `<button onclick="resetDonationMistake()" class="w-full mt-2 bg-yellow-500 text-white py-2 rounded text-sm hover:bg-yellow-600">Mistake? Click to Revert Eligibility</button>` 
-                : '';
-
-            statusDiv.innerHTML = `<div class='space-y-3 p-4 bg-gray-50 rounded-xl shadow-inner'><h3 class="text-xl font-bold text-red-600 border-b pb-2 mb-3">${currentUserData.name || 'Your Profile'}</h3><div class='flex items-center justify-between'><p class='text-base font-medium text-gray-700'>Email:</p><p class='text-base font-semibold text-gray-900'>${emailAddress}</p></div><div class='flex items-center justify-between'><p class='text-base font-medium text-gray-700'>Phone:</p><p class='text-base font-semibold text-gray-900'>${phoneNumber}</p></div><div class='flex items-center justify-between'><p class='text-base font-medium text-gray-700'>Blood Type:</p><p class='text-base font-semibold text-red-700'>${currentUserData.bloodType || 'N/A'}</p></div><div class='flex items-center justify-between'><p class='text-base font-medium text-gray-700'>Last Donation:</p><p class='text-base font-semibold text-gray-900'>${lastDonationDate}</p></div><div class='flex items-center justify-between border-b pb-3'><p class='text-base font-medium text-gray-700'>Total Donations:</p><p class='text-base font-semibold text-red-700'>${totalCount}</p></div><div class='flex items-center justify-between pt-3'><p class='text-base font-medium text-gray-700'>Location Updated:</p><p class='text-xs text-gray-900 text-right'>${lastLocation}</p></div><div class='pt-3'>${donationStatusHtml} ${ineligibleButton}</div></div>`;
+            }, (error) => {
+                console.error("Error listening to responses:", error);
+            });
         };
 
         window.showView = (viewId) => {
-            document.querySelectorAll('.app-view').forEach(v=>v.classList.add('hidden'));
-            if (viewId!=='search-view') {
-                 stopLocationTracking();
-                 if (responseUnsubscribe) { responseUnsubscribe(); responseUnsubscribe = null; } 
-                 clearRetryTimeout();
-            }
-            
-            const target = document.getElementById(viewId); 
-            if (!target) return; 
-            target.classList.remove('hidden'); 
-            
-            if (viewId==='admin-view') {
-                if (isAdminUser) {
-                    renderRequestsForAdmin();
-                } else {
-                    showMessage('Access Denied to Admin View. Redirecting to Search.', 'error');
-                    showView('search-view'); 
-                }
-            } else if (viewId==='search-view') {
+            document.querySelectorAll('.app-view').forEach(view => {
+                view.classList.add('hidden');
+            });
+            document.getElementById(viewId).classList.remove('hidden');
+
+            // Logic specific to views
+            if (viewId === 'search-view') {
                 startLocationTracking();
-                if (currentActiveRequest) {
-                    startResponseListener(currentActiveRequest);
-                    renderPotentialDonors();
-                } else {
-                     document.getElementById('request-status-message').innerHTML = ''; 
-                     document.getElementById('potential-donors').innerHTML = `<p class="text-center text-gray-500 py-4">Submit a request to see potential donors.</p>`;
-                }
-                document.getElementById('response-results').innerHTML = `<p class="text-center text-gray-500 py-4">Track donor responses here.</p>`;
-            } else if (viewId==='profile-view') {
-                // Ensure display is updated when switching to profile
-                updateDonorStatusDisplay();
+                if(currentActiveRequest) { renderPotentialDonors(); }
+            } else {
+                stopLocationTracking();
+            }
+
+            if (viewId === 'profile-view' && currentUserId) {
+                const isEditing = document.getElementById('save-profile-btn').classList.contains('hidden') === false;
+                renderProfile(isEditing); 
+            }
+
+            if (viewId === 'admin-view' && isAdminUser()) {
+                startAdminRequestsListener();
+            } else if (viewId === 'admin-view' && currentUserId) {
+                 showMessage("Access Denied: You must be an administrator to view this page.", 'error');
+                 showView('profile-view');
             }
         };
 
-        window.onload = async () => {
-            await initializeFirebase();
-            
-            document.getElementById('register-form').addEventListener('submit', registerHandler);
-            document.getElementById('login-form').addEventListener('submit', loginHandler);
-            document.getElementById('logout-btn').addEventListener('click', logoutHandler);
-            document.getElementById('submit-request-btn').addEventListener('click', handleDonorRequest); 
-            
-            // Initial view is handled by onAuthStateChanged after Firebase initialization
+        // --- AUTHENTICATION HANDLERS ---
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                showMessage("Login successful! Redirecting to profile...", 'success');
+                showView('profile-view'); 
+            } catch (error) {
+                console.error("Login Error:", error);
+                showMessage(`Login failed: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const email = form['email'].value;
+            const password = form['password'].value;
+            const name = form['name'].value;
+            const phoneNumber = form['phoneNumber'].value;
+            const bloodType = form['bloodType'].value;
+
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                await setDoc(doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'donors', userCredential.user.uid), {
+                    email, name, phoneNumber, bloodType,
+                    lastDonationDate: 0,
+                    donationCount: 0,
+                    location: new GeoPoint(0, 0)
+                });
+                showMessage("Registration successful! Logging you in...", 'success');
+                showView('profile-view');
+            } catch (error) {
+                console.error("Registration Error:", error);
+                showMessage(`Registration failed: ${error.message}`, 'error');
+            }
+        });
+
+        window.forgotPassword = async () => {
+            const emailInput = document.getElementById('login-email');
+            const email = emailInput.value.trim();
+
+            if (!email) {
+                showMessage("Please enter your email address in the Login form to reset your password.", 'error');
+                return;
+            }
+
+            try {
+                await sendPasswordResetEmail(auth, email);
+                showMessage(`Password reset email sent to ${email}. Check your inbox.`, 'success');
+            } catch (error) {
+                console.error("Password Reset Error:", error.code);
+                showMessage(`Password reset failed: ${error.message}`, 'error');
+            }
         };
+
+        // --- FIREBASE LISTENERS & DATA ---
+        
+        // NEW: Listener for Admin UIDs
+        const setupAdminListener = () => {
+             const adminsColRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'admins');
+             onSnapshot(adminsColRef, (snapshot) => {
+                 adminIds = snapshot.docs.map(doc => doc.id);
+                 // If the user is logged in, update the UI to show/hide the Admin button
+                 if (currentUserId) {
+                     updateHeaderUI(true);
+                 }
+             }, (error) => {
+                 console.error("Admin listener error:", error);
+             });
+        };
+
+        const setupDonorListener = () => {
+            const donorsColRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'donors');
+            onSnapshot(donorsColRef, (snapshot) => {
+                donorData = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+            }, (error) => {
+                console.error("Donor listener error:", error);
+            });
+        };
+
+        // Check for active notifications and update state
+        const checkAndRenderNotifications = () => {
+            if (!currentUserId || !db) return;
+
+            // Listen to notifications addressed to the current user
+            const notificationsColRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'notifications');
+            const q = query(notificationsColRef, where('recipientUid', '==', currentUserId), where('status', '==', 'pending'));
+
+            onSnapshot(q, (snapshot) => {
+                activeNotifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Re-render profile view only if it's currently visible
+                const profileView = document.getElementById('profile-view');
+                if (!profileView.classList.contains('hidden')) {
+                     const isEditing = document.getElementById('save-profile-btn').classList.contains('hidden') === false;
+                     renderProfile(isEditing); 
+                }
+               
+            }, (error) => {
+                console.error("Notification listener error (Check READ rule for notifications!):", error);
+            });
+        };
+
+        const setupCurrentUserListener = (email) => {
+            if (!currentUserId) return;
+            const donorDocRef = doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'donors', currentUserId);
+            onSnapshot(donorDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    currentUserData = { ...docSnap.data(), email };
+                    renderProfile(false); // Re-render profile when data changes
+                } else {
+                    console.warn("Current user donor data not found. Using minimal data.");
+                    currentUserData = { email }; 
+                    renderProfile(false);
+                }
+            }, (error) => {
+                console.error("Current user listener error:", error);
+            });
+            // Start listening for incoming notifications
+            checkAndRenderNotifications();
+        };
+
+        // --- ADMIN DASHBOARD LOGIC ---
+        let adminRequestsUnsubscribe = null;
+        
+        const startAdminRequestsListener = () => {
+            if (!isAdminUser()) return;
+            if (adminRequestsUnsubscribe) { adminRequestsUnsubscribe(); }
+
+            const requestsColRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'requests');
+            // Listen for all requests
+            adminRequestsUnsubscribe = onSnapshot(requestsColRef, (snapshot) => {
+                const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAdminRequests(requests);
+            }, (error) => {
+                console.error("Admin Requests listener error (Check READ rule for requests!):", error);
+                document.getElementById('admin-requests-list').innerHTML = `<p class="text-center text-red-500 py-4">Error loading requests: Permission Denied or Network Error.</p>`;
+            });
+        };
+
+        const renderAdminRequests = (requests) => {
+            const container = document.getElementById('admin-requests-list');
+            
+            if (requests.length === 0) {
+                container.innerHTML = `<p class="text-center text-gray-500 py-4">No active blood requests found.</p>`;
+                return;
+            }
+
+            let html = requests.map(req => {
+                const date = new Date(req.createdAt).toLocaleString();
+                const statusColor = req.status === 'active' ? 'bg-red-500' : 'bg-green-500';
+                
+                return `
+                    <div class="p-4 border border-gray-200 rounded-lg shadow-sm space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xl font-bold text-gray-900">${req.bloodType} Blood Needed</span>
+                            <span class="px-3 py-1 text-xs font-semibold text-white rounded-full ${statusColor}">
+                                ${req.status.toUpperCase()}
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-600">Request ID: <span class="font-mono text-xs text-gray-500">${req.id}</span></p>
+                        <p class="text-sm text-gray-600">Requester ID: ${req.requesterId}</p>
+                        <p class="text-sm text-gray-600">Notified Donors: ${req.notifiedCount || 0} within ${req.radiusKm || 0} km</p>
+                        <p class="text-xs text-gray-500">Created At: ${date}</p>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        };
+
+
+        // --- DONOR RESPONSE LOGIC ---
+        window.handleDonorResponse = async (notificationId, action) => {
+            if (!currentUserId || !currentUserData.name || !currentUserData.phoneNumber) {
+                return showMessage("Please complete your name and phone number in your profile before responding.", 'error');
+            }
+
+            const notification = activeNotifications.find(n => n.id === notificationId);
+            if (!notification) return showMessage("Notification data missing.", 'error');
+
+            const notificationDocRef = doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'notifications', notificationId);
+            
+            try {
+                if (action === 'accept') {
+                    // 1. Update Notification Status
+                    await updateDoc(notificationDocRef, { status: 'accepted' });
+
+                    // 2. Create Response in Request Subcollection (For the Requestor to see)
+                    const responseColRef = collection(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'requests', notification.requestId, 'responses');
+                    await addDoc(responseColRef, {
+                        donorUid: currentUserId,
+                        donorName: currentUserData.name,
+                        donorPhone: currentUserData.phoneNumber,
+                        bloodType: currentUserData.bloodType,
+                        responseAt: Date.now(),
+                    });
+                    
+                    showMessage("Response sent! The requestor will be able to contact you now.", 'success');
+                    
+                } else if (action === 'reject') {
+                     await updateDoc(notificationDocRef, { status: 'rejected' });
+                     showMessage("You have declined this request. Your status is now updated.", 'info');
+                }
+
+            } catch (e) {
+                showMessage(`Failed to submit response: ${e.message}`, 'error');
+                console.error("Donor response error:", e);
+            }
+        };
+
+        // --- PROFILE LOGIC ---
+        window.recordDonation = () => {
+             if (!currentUserId) return showMessage('Must be logged in.', 'error');
+             if (currentUserData && !currentUserData.bloodType) return showMessage('Please complete your profile (Blood Type) before recording a donation.', 'error');
+             document.getElementById('donation-modal').classList.remove('hidden');
+        };
+
+        window.handleDonationAdjustment = async (action) => {
+            document.getElementById('donation-modal').classList.add('hidden');
+            if (!currentUserId) return;
+            
+            const donorDocRef = doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'donors', currentUserId);
+            
+            try {
+                if (action === 'record') {
+                     await updateDoc(donorDocRef, {
+                        lastDonationDate: Date.now(),
+                        donationCount: increment(1)
+                    });
+                    showMessage("New donation recorded successfully! Thank you for saving a life.", 'success');
+                } else if (action === 'decrement') {
+                    if ((currentUserData.donationCount || 0) > 0) {
+                        await updateDoc(donorDocRef, {
+                            // Decrement count, and reset lastDonationDate to 0 for immediate eligibility re-evaluation
+                            donationCount: increment(-1),
+                            lastDonationDate: 0 
+                        });
+                        showMessage("Last donation undone (-1). Eligibility period reset.", 'info');
+                    } else {
+                        showMessage("Cannot undo donation. Count is already 0.", 'error');
+                    }
+                } else if (action === 'reset') {
+                    await updateDoc(donorDocRef, {
+                        donationCount: 0,
+                        lastDonationDate: 0 
+                    });
+                    showMessage("Donation count successfully reset to 0.", 'info');
+                } else {
+                    return;
+                }
+            } catch (e) {
+                showMessage("Failed to update donation history.", 'error');
+                console.error("Donation adjustment error:", e);
+            }
+        };
+
+
+        window.renderProfile = (isEditMode) => {
+            const container = document.getElementById('donor-status-display');
+            const editBtn = document.getElementById('edit-profile-btn');
+            const saveBtn = document.getElementById('save-profile-btn');
+            
+            if (!currentUserData) {
+                container.innerHTML = `<p class="text-center text-gray-500">Loading profile data...</p>`;
+                return;
+            }
+
+            const lastDonation = currentUserData.lastDonationDate || 0;
+            const timeSinceLast = Date.now() - lastDonation;
+            const eligible = timeSinceLast >= MIN_MS_BETWEEN_DONATIONS;
+            const daysSinceLast = Math.floor(timeSinceLast / (1000 * 60 * 60 * 24));
+            const daysRemaining = Math.max(0, MIN_DAYS_BETWEEN_DONATIONS - daysSinceLast);
+
+            const statusColor = eligible ? 'bg-green-100 border-green-500' : 'bg-yellow-100 border-yellow-500';
+            const statusText = eligible ? 
+                `<span class="text-green-700 font-bold">ELIGIBLE</span>` :
+                `<span class="text-yellow-700 font-bold">ELIGIBLE in ${daysRemaining} days</span>`;
+            
+            // Notifications for Donor
+            const notificationHtml = activeNotifications.length > 0 ?
+                activeNotifications.map(n => `
+                    <div class="p-4 rounded-lg shadow-md bg-yellow-100 border border-yellow-400 space-y-2">
+                        <p class="text-md font-bold text-yellow-800">🚨 Urgent Request for Blood Type: ${n.bloodType}</p>
+                        <p class="text-sm text-yellow-700">A requestor needs your help now.</p>
+                        <div class="flex space-x-3 mt-3">
+                            <button onclick="handleDonorResponse('${n.id}', 'accept')" class="flex-1 py-2 px-4 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition duration-150 shadow-md">
+                                I Can Help (Accept)
+                            </button>
+                            <button onclick="handleDonorResponse('${n.id}', 'reject')" class="flex-1 py-2 px-4 text-sm font-semibold text-gray-700 border border-gray-400 bg-gray-200 rounded-lg hover:bg-gray-300 transition duration-150 shadow-md">
+                                Decline
+                            </button>
+                        </div>
+                    </div>
+                `).join('<div class="h-4"></div>') : ''; 
+
+            // Display Mode
+            if (!isEditMode) {
+                editBtn.classList.remove('hidden');
+                saveBtn.classList.add('hidden');
+                container.innerHTML = `
+                    ${notificationHtml}
+                    <div class="p-6 rounded-lg border-l-4 border-red-500 shadow-md bg-white space-y-3">
+                        <p class="text-2xl font-bold text-gray-800 border-b pb-2">${currentUserData.name || 'Donor Profile'}</p>
+                        <div class="space-y-2">
+                            <p class="text-sm text-gray-700">Email: <span class="font-bold text-red-600">${currentUserData.email || 'N/A'}</span></p>
+                            <p class="text-sm text-gray-700">Phone: <span class="font-bold">${currentUserData.phoneNumber || 'N/A'}</span></p>
+                            <p class="text-sm text-gray-700">Blood Type: <span class="font-bold text-lg text-red-600">${currentUserData.bloodType || 'N/A'}</span></p>
+                        </div>
+                    </div>
+                    <div class="p-4 rounded-lg border-l-4 ${statusColor} shadow-md bg-white">
+                        <p class="text-lg font-semibold text-gray-800">Donation Status: ${statusText}</p>
+                        <p class="text-sm text-gray-600 mt-1">Total Donations: <span class="font-bold">${currentUserData.donationCount || 0}</span></p>
+                        <p class="text-xs text-gray-500">Last Donation: ${lastDonation ? new Date(lastDonation).toLocaleDateString() : 'Never Recorded'}</p>
+                    </div>
+                `;
+            } 
+            // Edit Mode
+            else {
+                 editBtn.classList.add('hidden');
+                 saveBtn.classList.remove('hidden');
+                 container.innerHTML = `
+                    <div class="p-6 rounded-lg border-l-4 border-blue-500 shadow-md bg-white space-y-4">
+                        <p class="text-2xl font-bold text-gray-800 border-b pb-2">Edit Details</p>
+                        <div class="space-y-3">
+                            <div><label class="block text-sm font-medium text-gray-700">Full Name</label><input id="edit-name" type="text" value="${currentUserData.name || ''}" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg"></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Email (Read Only)</label><input type="email" value="${currentUserData.email || 'N/A'}" disabled class="mt-1 block w-full px-4 py-3 border border-gray-200 bg-gray-100 rounded-lg"></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Phone Number</label><input id="edit-phone" type="tel" value="${currentUserData.phoneNumber || ''}" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg"></div>
+                            <div><label class="block text-sm font-medium text-gray-700">Blood Type</label>
+                                <select id="edit-bloodType" required class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg">
+                                    ${['O+','O-','A+','A-','B+','B-','AB+','AB-'].map(t => 
+                                        `<option value="${t}" ${currentUserData.bloodType === t ? 'selected' : ''}>${t}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-4 rounded-lg border-l-4 ${statusColor} shadow-md bg-white">
+                         <p class="text-lg font-semibold text-gray-800">Donation Status: ${statusText}</p>
+                         <p class="text-xs text-gray-500 mt-1">Donation history is not editable from this view.</p>
+                    </div>
+                 `;
+            }
+        };
+
+        window.toggleEditMode = () => {
+            const isEditing = document.getElementById('save-profile-btn').classList.contains('hidden');
+            renderProfile(isEditing);
+        };
+        
+        window.saveProfileChanges = async () => {
+            if (!currentUserId) return;
+            const newName = document.getElementById('edit-name').value;
+            const newPhone = document.getElementById('edit-phone').value;
+            const newBloodType = document.getElementById('edit-bloodType').value;
+
+            if (!newName || !newPhone || !newBloodType) {
+                return showMessage("All fields are required.", 'error');
+            }
+
+            try {
+                const donorDocRef = doc(db, 'artifacts', APP_ID_PATH, 'public', 'data', 'donors', currentUserId);
+                await updateDoc(donorDocRef, {
+                    name: newName,
+                    phoneNumber: newPhone,
+                    bloodType: newBloodType,
+                });
+                showMessage("Profile updated successfully!", 'success');
+                renderProfile(false); // Switch back to view mode
+            } catch (e) {
+                showMessage("Failed to save profile changes.", 'error');
+                console.error("Profile update error:", e);
+            }
+        };
+
+
+        // --- INITIALIZATION ---
+        initializeFirebase();
     </script>
 </body>
 </html>
